@@ -155,9 +155,30 @@ if (typeof document !== 'undefined') {
   // 이식한 템플릿의 inline onclick(go/rescan/addW/clearW)을 위해 전역 노출
   window.go = go; window.rescan = rescan; window.addW = addW; window.clearW = clearW;
   try { const c = JSON.parse(localStorage.getItem(LS_CACHE) || 'null'); if (c) { S.results = c.results || []; S.prices = c.prices || null; S.sellTax = c.sellTax || null; S.scanAt = c.scanAt || null; buildDATA(); } } catch {}
+  // 브라우저 자동감지 설치 안내(설치됨/닫음이면 미표시). iOS Chrome엔 'Safari로 열기' 경로 명시.
+  function setupInstallHint() {
+    try { if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) return; } catch (e) {}
+    try { if (localStorage.getItem('os_install_dismissed')) return; } catch (e) {}
+    const ua = navigator.userAgent || '';
+    const isIOS = /iPad|iPhone|iPod/.test(ua);
+    const isChromeIOS = isIOS && /CriOS/.test(ua);
+    const isOtherIOS = isIOS && /FxiOS|EdgiOS|OPiOS/.test(ua);
+    const isSafariIOS = isIOS && !isChromeIOS && !isOtherIOS;
+    let msg = '';
+    if (isChromeIOS || isOtherIOS) msg = '📲 아이폰에선 이 브라우저로 앱 설치가 안 됩니다 — 메뉴에서 <b>"Safari에서 열기"</b> → 공유 〔□↑〕 → <b>"홈 화면에 추가"</b>';
+    else if (isSafariIOS) msg = '📲 설치: 하단 공유 〔□↑〕 → <b>"홈 화면에 추가"</b>';
+    else if (/Android/.test(ua)) msg = '📲 설치: 브라우저 메뉴 ⋮ → <b>"앱 설치"</b>';
+    else return;
+    const bar = document.createElement('div'); bar.id = 'installHint';
+    bar.innerHTML = '<span>' + msg + '</span><button type="button" id="ihX">닫기</button>';
+    document.body.appendChild(bar);
+    document.getElementById('ihX').onclick = () => { bar.remove(); try { localStorage.setItem('os_install_dismissed', '1'); } catch (e) {} };
+  }
+
   window.addEventListener("DOMContentLoaded", () => {
     render();
     scanAll();
+    setupInstallHint();
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
   });
 }
