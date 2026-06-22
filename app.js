@@ -24,7 +24,7 @@ function ago(iso, now) { let t = Date.parse(iso) / 1000; if (!t) return "never";
 
 // ── 렌더 (dashboard.py 그대로, DATA를 읽음) ──
 function pct(v, total) { return total > 0 ? ((Number(v) || 0) / total * 100).toFixed(1) + '%' : '—'; }
-const COLOR = { polygon: "#a06bff", anubis: "#f0b429" };
+const COLOR = { polygon: "#ff4d4d", anubis: "#39ff14" }; // Polygon=붉은색, Anubis=네온 그린
 function go(sel) {
   _sel = sel;
   document.getElementById("tab-sum").className = "tab" + (sel ? "" : " on");
@@ -44,7 +44,7 @@ function renderSummary() {
   let html = '<div class="sum"><div>' + donut(chs) + '</div><div style="flex:1 1 280px"><div class="big">' + f2(tot) + '<span class="u">LGNS 보유 (명목 합산)</span></div>' +
     '<div class="meta">지갑 ' + f0(n.wallet_count) + ' · 포지션 ' + f0(n.position_count) + ' · ' + f0(n.chain_count) + '체인 ⚠ 체인 간 LGNS는 별개 토큰 — 명목 합</div>' +
     '<div class="lgd">' + lgd + '</div>' +
-    '<div class="red">보유 가치 <b>' + usd(n.usd_total) + '</b> · 매도세후 <b>' + usd(n.usd_total_after_tax) + '</b></div>' +
+    '<div class="red">전체 보유가치 <b>' + usd(n.usd_total) + '</b> · 매도세후 <b>' + usd(n.usd_total_after_tax) + '</b></div>' +
     '<div class="red" style="font-size:12px;color:#8b949e">redeem가능(명목) ' + f2(n.redeemable_lgns) + ' LGNS · ' + usd(n.usd) + ' → 매도세후 ' + usd(n.usd_after_tax) + '</div></div></div>';
   if (!DATA.wallets.length) { return html + '<div class="empty">등록된 지갑이 없습니다. 아래 "+ 지갑 추가"로 등록하세요.</div>'; }
   html += '<p style="color:#8b949e;font-size:11px;margin:4px 0">지갑 선택 (클릭 → 상세):</p><div class="chips">';
