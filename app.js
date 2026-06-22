@@ -23,6 +23,7 @@ function usd(n) { return n == null ? '<span class="dim">—</span>' : '<span cla
 function ago(iso, now) { let t = Date.parse(iso) / 1000; if (!t) return "never"; let s = Math.max(0, now - Math.floor(t)); if (s < 60) return s + "s"; if (s < 3600) return Math.floor(s / 60) + "m"; if (s < 86400) return Math.floor(s / 3600) + "h"; return Math.floor(s / 86400) + "d"; }
 
 // ── 렌더 (dashboard.py 그대로, DATA를 읽음) ──
+function pct(v, total) { return total > 0 ? ((Number(v) || 0) / total * 100).toFixed(1) + '%' : '—'; }
 const COLOR = { polygon: "#a06bff", anubis: "#f0b429" };
 function go(sel) {
   _sel = sel;
@@ -48,30 +49,35 @@ function renderSummary() {
   DATA.wallets.forEach(w => { html += '<div class="chip" onclick="go(\'' + esc(w.name) + '\')">' + esc(w.name) + ' <b>' + f0(w.principal_lgns) + '</b><span class="s">' + w.chains_present.map(c => c === "polygon" ? "▣Poly" : "▪Anu").join(" ") + '</span></div>'; });
   return html + '</div>';
 }
-function chainBlock(c) {
+function chainBlock(c, walletTotal) {
   let rows = c.products.map(p => {
     let reb = p.rebase_lgns ? '<span class="pur">' + f2(p.rebase_lgns) + '</span>' : '<span class="dim">—</span>';
     let ext = p.extra_lgns ? '<span class="pur">' + f2(p.extra_lgns) + '</span>' : '<span class="dim">—</span>';
     let cd = "";
     if (p.cooldown_lgns > 0) { let left = p.cooldown_unlock - DATA.now; let rem = left > 0 ? (" 해제 " + Math.floor(left / 3600) + "h" + Math.floor((left % 3600) / 60) + "m") : ""; cd = ' <span class="yel" style="font-size:10px">· 쿨다운 ' + f2(p.cooldown_lgns) + rem + '</span>'; }
-    return '<tr><td>' + esc(p.label) + ' <span class="cnt">' + p.count + '</span>' + cd + '</td><td>' + f2(p.principal_lgns) + '</td><td class="grn">' + f2(p.unlocked_lgns) + '</td><td>' + reb + '</td><td>' + ext + '</td><td>' + usd(p.usd) + '</td><td>' + usd(p.usd_after_tax) + '</td></tr>';
+    return '<tr><td>' + esc(p.label) + ' <span class="cnt">' + p.count + '</span>' + cd + '</td><td>' + f2(p.principal_lgns) + '</td><td class="dim">' + pct(p.principal_lgns, walletTotal) + '</td><td class="grn">' + f2(p.unlocked_lgns) + '</td><td>' + reb + '</td><td>' + ext + '</td><td>' + usd(p.usd) + '</td><td>' + usd(p.usd_after_tax) + '</td></tr>';
   }).join("");
-  return '<div class="chain"><div class="chead"><div class="nm"><span class="dot" style="background:' + (COLOR[c.key] || "#888") + '"></span>' + esc(c.name) + ' <span class="ct">· 매도세 ' + (c.sell_tax * 100).toFixed(2) + '%</span></div><div class="ct">' + c.position_count + ' 포지션</div></div>' +
-    '<div class="chsum"><span>예치</span><b>' + f2(c.principal_lgns) + '</b><span>redeem가능</span><b class="grn">' + f2(c.redeemable_lgns) + '</b><span>USD</span>' + usd(c.usd) + '<span>매도세후</span>' + usd(c.usd_after_tax) + '</div>' +
-    '<table class="m"><thead><tr><th>상품</th><th>예치</th><th>원금 해제분</th><th>rebase interest</th><th>extra interest</th><th>USD</th><th>매도세후</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+  return '<div class="chain"><div class="chead"><div class="nm"><span class="dot" style="background:' + (COLOR[c.key] || "#888") + '"></span>' + esc(c.name) + ' <span class="ct">· 매도세 ' + (c.sell_tax * 100).toFixed(2) + '%</span></div><div class="ct">' + c.position_count + ' 포지션 · 지갑 내 ' + pct(c.principal_lgns, walletTotal) + '</div></div>' +
+    '<div class="chsum"><span>예치</span><b>' + f2(c.principal_lgns) + '</b><span>비중</span><b>' + pct(c.principal_lgns, walletTotal) + '</b><span>redeem가능</span><b class="grn">' + f2(c.redeemable_lgns) + '</b><span>USD</span>' + usd(c.usd) + '<span>매도세후</span>' + usd(c.usd_after_tax) + '</div>' +
+    '<table class="m"><thead><tr><th>상품</th><th>예치</th><th>비중</th><th>원금 해제분</th><th>rebase interest</th><th>extra interest</th><th>USD</th><th>매도세후</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
 }
 function renderDetail(name) {
   let w = (DATA.wallets || []).filter(x => x.name === name)[0];
   if (!w) return '<div class="empty">지갑을 찾을 수 없습니다.</div>';
   let html = '<span class="back" onclick="go(null)">← 요약으로</span>' +
     '<div class="chead" style="border-radius:8px;margin-bottom:10px"><div class="nm">' + esc(w.name) + ' <span class="ct">' + esc(w.address) + '</span></div><div class="ct">' + f2(w.principal_lgns) + ' LGNS</div></div>';
-  Object.keys(w.detail.chains).forEach(k => { let c = w.detail.chains[k]; if (c.position_count > 0) html += chainBlock(c); });
+  let walletTotal = w.principal_lgns || 0;
+  Object.keys(w.detail.chains).forEach(k => { let c = w.detail.chains[k]; if (c.position_count > 0) html += chainBlock(c, walletTotal); });
   return html;
 }
 function renderStatus() {
   if (!DATA) return;
   let p = ["scan " + ago(DATA.scan_completed_at, DATA.now) + " ago"];
-  if (DATA.prices && DATA.prices.polygon) p.push("LGNS $" + Number(DATA.prices.polygon).toFixed(2));
+  const pr = DATA.prices || {};
+  const px = [];
+  if (pr.polygon) px.push("Poly $" + Number(pr.polygon).toFixed(2));
+  if (pr.anubis) px.push("Anu $" + Number(pr.anubis).toFixed(2));
+  if (px.length) p.push("LGNS " + px.join(" · "));
   if (DATA.scanning) p.push("⟳ 스캔 중…");
   const st = document.getElementById("status"); if (st) st.textContent = p.join("  ·  ");
   const b = document.getElementById("rescan"); if (b) { b.disabled = !!DATA.scanning; b.textContent = DATA.scanning ? "⟳ 스캔 중…" : "↻ 즉시 스캔"; }
