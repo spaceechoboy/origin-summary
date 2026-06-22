@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Origin Summary</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0a0e14">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>
+  /* Awake ORIGIN 네온 다크 테마 — 배경 #0a0e14, 액센트 네온 그린/시안 */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #0a0e14;
+    --bg2:      #111722;
+    --bg3:      #1a2233;
+    --border:   #1e2d44;
+    --neon-g:   #00ff9d;
+    --neon-c:   #00d4ff;
+    --neon-dim: rgba(0,212,255,0.18);
+    --text:     #e2eaf6;
+    --muted:    #6b82a0;
+    --danger:   #ff4d6d;
+    --radius:   12px;
+    --font:     system-ui, -apple-system, 'Segoe UI', sans-serif;
+  }
+
+  html, body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 15px;
+    min-height: 100dvh;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  /* ── 헤더 ── */
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    padding: calc(14px + env(safe-area-inset-top)) 16px 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  header h1 {
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    color: var(--neon-c);
+    flex: 1;
+  }
+  #total {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--neon-g);
+    letter-spacing: .02em;
+    min-width: 6ch;
+    text-align: right;
+  }
+  button {
+    cursor: pointer;
+    border: none;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    transition: opacity .15s;
+  }
+  button:active { opacity: .7; }
+
+  #modeBtn {
+    background: var(--bg3);
+    color: var(--neon-c);
+    border: 1px solid var(--border);
+    padding: 6px 12px;
+    white-space: nowrap;
+  }
+  #refreshBtn {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    padding: 6px 10px;
+  }
+
+  /* ── 지갑 추가 행 ── */
+  #addRow {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  #addRow input {
+    flex: 1 1 160px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    padding: 8px 12px;
+    outline: none;
+    min-width: 0;
+  }
+  #addRow input:focus { border-color: var(--neon-c); }
+  #wAdd {
+    background: var(--neon-c);
+    color: var(--bg);
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+  }
+  #wErr {
+    flex: 1 1 100%;
+    color: var(--danger);
+    font-size: 12px;
+    min-height: 16px;
+  }
+
+  /* ── 에러 배너 ── */
+  #errBanner {
+    background: rgba(255,77,109,.12);
+    color: var(--danger);
+    font-size: 12px;
+    padding: 8px 16px;
+    border-bottom: 1px solid rgba(255,77,109,.2);
+  }
+
+  /* ── 카드 목록 ── */
+  #cards {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-bottom: calc(80px + env(safe-area-inset-bottom));
+  }
+
+  .empty-msg {
+    color: var(--muted);
+    font-size: 14px;
+    text-align: center;
+    padding: 40px 0;
+  }
+
+  .card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .card-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .card-head:active { background: var(--bg3); }
+  .card-name {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .label {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--neon-c);
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .addr {
+    font-size: 12px;
+    color: var(--muted);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    white-space: nowrap;
+  }
+  .card-val {
+    text-align: right;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .lgns-amt {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--neon-g);
+  }
+  .usd-amt {
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .chevron {
+    color: var(--muted);
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+
+  /* ── 상세 펼침 ── */
+  .card-detail {
+    border-top: 1px solid var(--border);
+    padding: 8px 0;
+    background: var(--bg);
+  }
+  .row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 6px 16px;
+    font-size: 13px;
+    gap: 8px;
+  }
+  .row.sub {
+    padding-left: 28px;
+    font-size: 11px;
+    color: var(--muted);
+    font-style: italic;
+  }
+  .row.dim {
+    color: var(--muted);
+    font-size: 12px;
+    justify-content: center;
+  }
+  .pos-label {
+    color: var(--muted);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .pos-amt {
+    color: var(--text);
+    font-weight: 600;
+    white-space: nowrap;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+  }
+
+  /* ── 푸터 ── */
+  footer {
+    position: fixed;
+    bottom: 0;
+    left: 0; right: 0;
+    background: var(--bg);
+    border-top: 1px solid var(--border);
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+    font-size: 11px;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  /* ── 스크롤바 (웹킷) ── */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Origin Summary</h1>
+  <div id="total">—</div>
+  <button id="modeBtn">KRW로 보기</button>
+  <button id="refreshBtn">새로고침</button>
+</header>
+
+<section id="addRow">
+  <input id="wAddr" type="text" placeholder="0x… 지갑 주소" autocomplete="off" spellcheck="false">
+  <input id="wLabel" type="text" placeholder="이름(선택)" autocomplete="off">
+  <button id="wAdd">추가</button>
+  <div id="wErr" aria-live="polite"></div>
+</section>
+
+<div id="errBanner" hidden></div>
+
+<main id="cards"></main>
+
+<footer>read-only · 주소는 이 브라우저에만 저장 · SpaceEchoBoy</footer>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
