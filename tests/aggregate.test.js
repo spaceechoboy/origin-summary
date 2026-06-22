@@ -6,17 +6,17 @@ import { DISPLAY } from '../src/display.js';
 const W1 = '0x59A26bB8c1F6880991EAbc3Ae1b7937E3563D21d';
 const W2 = '0x7b555cC0cb6883C9DB047827485c6023a42A0dc3';
 
-// long_stake: principal 1000, redeem(pending) 20 = interest12 + unlocked5 + extra3
+// long_stake: principal 1000, redeem(pending) 20 = interest12 + unlocked5 + extra3, holding 1015(=원금+이자+추가)
 const longPoly = (wallet) => ({
   wallet, chain: 'polygon', contractName: 'LONG600', positionType: 'long_stake',
   principalLgns: 1000, pendingLgns: 20, interestLgns: 12, unlockedPrincipalLgns: 5, extraLgns: 3,
-  cooldownLgns: 0, cooldownUnlock: 0, claimableNow: true,
+  holdingLgns: 1015, cooldownLgns: 0, cooldownUnlock: 0, claimableNow: true,
 });
-// community_reward: principal 0, redeem 26
+// community_reward: principal 0, redeem 26, holding 26(=청구가능)
 const commAnu = (wallet) => ({
   wallet, chain: 'anubis', contractName: 'anubis_community_reward', positionType: 'community_reward',
   principalLgns: 0, pendingLgns: 26, interestLgns: 0, unlockedPrincipalLgns: 0, extraLgns: 0,
-  cooldownLgns: 0, cooldownUnlock: 0, claimableNow: true,
+  holdingLgns: 26, cooldownLgns: 0, cooldownUnlock: 0, claimableNow: true,
 });
 
 const PRICES = { polygon: 3, anubis: 2.91 };
@@ -30,8 +30,10 @@ test('aggregate: 상품 행 분해 + 매도세후 (Wallet Monitor 동일 로직)
   assert.equal(prod.unlocked_lgns, 5);   // redeem(20) - rebase(12) - extra(3)
   assert.equal(prod.rebase_lgns, 12);
   assert.equal(prod.extra_lgns, 3);
-  assert.equal(prod.usd, 60);            // 20 * 3
+  assert.equal(prod.usd, 60);            // redeem 20 * 3 (회수가능분)
   assert.equal(prod.usd_after_tax, 57);  // 60 * (1 - 0.05)
+  assert.equal(prod.usd_total, 3045);              // holding 1015 * 3 (전체 보유가치)
+  assert.equal(prod.usd_total_after_tax, 2892.75); // 3045 * (1 - 0.05)
 });
 
 test('aggregate: 명목합 = principal_lgns 합산(holding 아님), redeemable 별도', () => {
@@ -43,6 +45,7 @@ test('aggregate: 명목합 = principal_lgns 합산(holding 아님), redeemable �
   assert.equal(a.chains.anubis.redeemable_lgns, 26);
   assert.equal(a.notional.chain_count, 2);
   assert.equal(a.notional.position_count, 2);
+  assert.equal(a.notional.usd_total, 3120.66); // poly holding 1015*3 + anu community 26*2.91 = 3045 + 75.66
 });
 
 test('aggregate: 가격 없으면 usd null (NaN 없음)', () => {

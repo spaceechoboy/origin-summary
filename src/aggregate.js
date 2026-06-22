@@ -18,9 +18,10 @@ function aggregateProducts(positions, chain, cfg, price) {
   for (const p of positions) {
     const cn = p.contractName || "?";
     let g = groups.get(cn);
-    if (!g) { g = { count: 0, principal: 0, redeem: 0, rebase: 0, extra: 0, cooldown: 0, cd_unlock: 0 }; groups.set(cn, g); }
+    if (!g) { g = { count: 0, principal: 0, holding: 0, redeem: 0, rebase: 0, extra: 0, cooldown: 0, cd_unlock: 0 }; groups.set(cn, g); }
     g.count += 1;
     g.principal += Number(p.principalLgns) || 0;
+    g.holding += Number(p.holdingLgns) || 0; // 전체 보유 가치(스테이크=원금+이자+추가, 리워드=청구가능)
     g.redeem += redeemable(p);
     g.rebase += Number(p.interestLgns) || 0;
     g.extra += Number(p.extraLgns) || 0;
@@ -42,8 +43,11 @@ function aggregateProducts(positions, chain, cfg, price) {
       cooldown_lgns: round(g.cooldown, 6),
       cooldown_unlock: g.cd_unlock,
       rebase_rate: null, extra_rate: null, extra_trend: null,
+      // usd/usd_after_tax = redeem가능분(회수 가능) 기준. usd_total/_after_tax = 전체 보유 가치 기준.
       usd: usdOf(g.redeem, price),
       usd_after_tax: afterTax(usdOf(g.redeem, price), tax),
+      usd_total: usdOf(g.holding, price),
+      usd_total_after_tax: afterTax(usdOf(g.holding, price), tax),
     });
   }
   return rows;
@@ -61,6 +65,8 @@ export function aggregate(positions, cfg, prices) {
     const principal = cps.reduce((a, p) => a + (Number(p.principalLgns) || 0), 0);
     const redeem = cps.reduce((a, p) => a + redeemable(p), 0);
     const usd = usdOf(redeem, price);
+    const holdingTotal = cps.reduce((a, p) => a + (Number(p.holdingLgns) || 0), 0);
+    const usdTotal = usdOf(holdingTotal, price);
     chains[ck] = {
       key: ck,
       name: (chainsMeta[ck] || {}).name || ck,
@@ -73,12 +79,16 @@ export function aggregate(positions, cfg, prices) {
       redeemable_lgns: round(redeem, 6),
       usd,
       usd_after_tax: afterTax(usd, tax),
+      usd_total: usdTotal,
+      usd_total_after_tax: afterTax(usdTotal, tax),
       products: aggregateProducts(cps, ck, cfg, price),
     };
   }
   const list = Object.values(chains);
   const anyUsd = list.some((c) => c.usd != null);
   const anyTax = list.some((c) => c.usd_after_tax != null);
+  const anyUsdT = list.some((c) => c.usd_total != null);
+  const anyTaxT = list.some((c) => c.usd_total_after_tax != null);
   const notional = {
     position_count: list.reduce((a, c) => a + c.position_count, 0),
     chain_count: list.filter((c) => c.position_count > 0).length,
@@ -87,6 +97,8 @@ export function aggregate(positions, cfg, prices) {
     redeemable_lgns: round(list.reduce((a, c) => a + c.redeemable_lgns, 0), 6),
     usd: anyUsd ? round(list.reduce((a, c) => a + (c.usd || 0), 0), 4) : null,
     usd_after_tax: anyTax ? round(list.reduce((a, c) => a + (c.usd_after_tax || 0), 0), 4) : null,
+    usd_total: anyUsdT ? round(list.reduce((a, c) => a + (c.usd_total || 0), 0), 4) : null,
+    usd_total_after_tax: anyTaxT ? round(list.reduce((a, c) => a + (c.usd_total_after_tax || 0), 0), 4) : null,
   };
   return { chains, notional };
 }

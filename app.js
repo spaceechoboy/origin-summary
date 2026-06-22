@@ -43,7 +43,9 @@ function renderSummary() {
   let lgd = chs.map(c => '<div class="li"><span class="sw" style="background:' + c.color + '"></span><span class="nm">' + esc(c.name) + '</span><b>' + f2(c.principal_lgns) + '</b><span class="pc">' + (tot ? (c.principal_lgns / tot * 100).toFixed(1) : 0) + '%</span></div>').join("");
   let html = '<div class="sum"><div>' + donut(chs) + '</div><div style="flex:1 1 280px"><div class="big">' + f2(tot) + '<span class="u">LGNS 보유 (명목 합산)</span></div>' +
     '<div class="meta">지갑 ' + f0(n.wallet_count) + ' · 포지션 ' + f0(n.position_count) + ' · ' + f0(n.chain_count) + '체인 ⚠ 체인 간 LGNS는 별개 토큰 — 명목 합</div>' +
-    '<div class="lgd">' + lgd + '</div><div class="red">redeem가능(명목) <b>' + f2(n.redeemable_lgns) + ' LGNS</b> · ' + usd(n.usd) + ' → 매도세후 ' + usd(n.usd_after_tax) + '</div></div></div>';
+    '<div class="lgd">' + lgd + '</div>' +
+    '<div class="red">보유 가치 <b>' + usd(n.usd_total) + '</b> · 매도세후 <b>' + usd(n.usd_total_after_tax) + '</b></div>' +
+    '<div class="red" style="font-size:12px;color:#8b949e">redeem가능(명목) ' + f2(n.redeemable_lgns) + ' LGNS · ' + usd(n.usd) + ' → 매도세후 ' + usd(n.usd_after_tax) + '</div></div></div>';
   if (!DATA.wallets.length) { return html + '<div class="empty">등록된 지갑이 없습니다. 아래 "+ 지갑 추가"로 등록하세요.</div>'; }
   html += '<p style="color:#8b949e;font-size:11px;margin:4px 0">지갑 선택 (클릭 → 상세):</p><div class="chips">';
   DATA.wallets.forEach(w => { html += '<div class="chip" onclick="go(\'' + esc(w.name) + '\')">' + esc(w.name) + ' <b>' + f0(w.principal_lgns) + '</b><span class="s">' + w.chains_present.map(c => c === "polygon" ? "▣Poly" : "▪Anu").join(" ") + '</span></div>'; });
@@ -55,10 +57,10 @@ function chainBlock(c, walletTotal) {
     let ext = p.extra_lgns ? '<span class="pur">' + f2(p.extra_lgns) + '</span>' : '<span class="dim">—</span>';
     let cd = "";
     if (p.cooldown_lgns > 0) { let left = p.cooldown_unlock - DATA.now; let rem = left > 0 ? (" 해제 " + Math.floor(left / 3600) + "h" + Math.floor((left % 3600) / 60) + "m") : ""; cd = ' <span class="yel" style="font-size:10px">· 쿨다운 ' + f2(p.cooldown_lgns) + rem + '</span>'; }
-    return '<tr><td>' + esc(p.label) + ' <span class="cnt">' + p.count + '</span>' + cd + '</td><td>' + f2(p.principal_lgns) + '</td><td class="dim">' + pct(p.principal_lgns, walletTotal) + '</td><td class="grn">' + f2(p.unlocked_lgns) + '</td><td>' + reb + '</td><td>' + ext + '</td><td>' + usd(p.usd) + '</td><td>' + usd(p.usd_after_tax) + '</td></tr>';
+    return '<tr><td>' + esc(p.label) + ' <span class="cnt">' + p.count + '</span>' + cd + '</td><td>' + f2(p.principal_lgns) + '</td><td class="dim">' + pct(p.principal_lgns, walletTotal) + '</td><td class="grn">' + f2(p.unlocked_lgns) + '</td><td>' + reb + '</td><td>' + ext + '</td><td>' + usd(p.usd_total) + '</td><td>' + usd(p.usd_total_after_tax) + '</td></tr>';
   }).join("");
   return '<div class="chain"><div class="chead"><div class="nm"><span class="dot" style="background:' + (COLOR[c.key] || "#888") + '"></span>' + esc(c.name) + ' <span class="ct">· 매도세 ' + (c.sell_tax * 100).toFixed(2) + '%</span></div><div class="ct">' + c.position_count + ' 포지션 · 지갑 내 ' + pct(c.principal_lgns, walletTotal) + '</div></div>' +
-    '<div class="chsum"><span>예치</span><b>' + f2(c.principal_lgns) + '</b><span>비중</span><b>' + pct(c.principal_lgns, walletTotal) + '</b><span>redeem가능</span><b class="grn">' + f2(c.redeemable_lgns) + '</b><span>USD</span>' + usd(c.usd) + '<span>매도세후</span>' + usd(c.usd_after_tax) + '</div>' +
+    '<div class="chsum"><span>예치</span><b>' + f2(c.principal_lgns) + '</b><span>비중</span><b>' + pct(c.principal_lgns, walletTotal) + '</b><span>redeem가능</span><b class="grn">' + f2(c.redeemable_lgns) + '</b><span>USD(전체)</span>' + usd(c.usd_total) + '<span>매도세후</span>' + usd(c.usd_total_after_tax) + '</div>' +
     '<table class="m"><thead><tr><th>상품</th><th>예치</th><th>비중</th><th>원금 해제분</th><th>rebase interest</th><th>extra interest</th><th>USD</th><th>매도세후</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
 }
 function renderDetail(name) {
