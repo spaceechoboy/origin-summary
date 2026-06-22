@@ -73,6 +73,8 @@ export function aggregate(positions, cfg, prices) {
       chain_id: (chainsMeta[ck] || {}).chain_id,
       explorer: (chainsMeta[ck] || {}).explorer || "",
       sell_tax: tax,
+      sell_tax_live: !!((cfg.sell_tax_live || {})[ck]), // true=온체인 실측, false=config fallback
+
       position_count: cps.length,
       wallet_count: new Set(cps.map((p) => p.wallet)).size,
       principal_lgns: round(principal, 6),

@@ -4,12 +4,12 @@
 import { scanWallet } from './src/scanner.js';
 import { aggregate, buildWallets } from './src/aggregate.js';
 import { DISPLAY } from './src/display.js';
-import { fetchPrices } from './src/prices.js';
+import { fetchPrices, fetchSellTax } from './src/prices.js';
 import { isAddress, looksLikePrivateKey } from './src/codec.js';
 
 const LS_WALLETS = 'os_wallets', LS_CACHE = 'os_cache';
 let DATA = null, _sel = null;
-const S = { wallets: loadWallets(), prices: null, scanning: false, scanAt: null, results: [] };
+const S = { wallets: loadWallets(), prices: null, sellTax: null, scanning: false, scanAt: null, results: [] };
 
 function loadWallets() { try { return JSON.parse(localStorage.getItem(LS_WALLETS) || '[]'); } catch { return []; } }
 function saveWallets() { try { localStorage.setItem(LS_WALLETS, JSON.stringify(S.wallets)); } catch {} }
@@ -60,7 +60,7 @@ function chainBlock(c, walletTotal) {
     if (p.cooldown_lgns > 0) { let left = p.cooldown_unlock - DATA.now; let rem = left > 0 ? (" 해제 " + Math.floor(left / 3600) + "h" + Math.floor((left % 3600) / 60) + "m") : ""; cd = ' <span class="yel" style="font-size:10px">· 쿨다운 ' + f2(p.cooldown_lgns) + rem + '</span>'; }
     return '<tr><td>' + esc(p.label) + ' <span class="cnt">' + p.count + '</span>' + cd + '</td><td>' + f2(p.principal_lgns) + '</td><td class="dim">' + pct(p.principal_lgns, walletTotal) + '</td><td class="grn">' + f2(p.unlocked_lgns) + '</td><td>' + reb + '</td><td>' + ext + '</td><td>' + usd(p.usd_total) + '</td><td>' + usd(p.usd_total_after_tax) + '</td></tr>';
   }).join("");
-  return '<div class="chain"><div class="chead"><div class="nm"><span class="dot" style="background:' + (COLOR[c.key] || "#888") + '"></span>' + esc(c.name) + ' <span class="ct">· 매도세 ' + (c.sell_tax * 100).toFixed(2) + '%</span></div><div class="ct">' + c.position_count + ' 포지션 · 지갑 내 ' + pct(c.principal_lgns, walletTotal) + '</div></div>' +
+  return '<div class="chain"><div class="chead"><div class="nm"><span class="dot" style="background:' + (COLOR[c.key] || "#888") + '"></span>' + esc(c.name) + ' <span class="ct">· 매도세 ' + (c.sell_tax * 100).toFixed(2) + '% ' + (c.sell_tax_live ? '<span style="color:#7ee787">⚡실시간</span>' : '<span class="dim">config</span>') + '</span></div><div class="ct">' + c.position_count + ' 포지션 · 지갑 내 ' + pct(c.principal_lgns, walletTotal) + '</div></div>' +
     '<div class="chsum"><span>예치</span><b>' + f2(c.principal_lgns) + '</b><span>비중</span><b>' + pct(c.principal_lgns, walletTotal) + '</b><span>redeem가능</span><b class="grn">' + f2(c.redeemable_lgns) + '</b><span>USD(전체)</span>' + usd(c.usd_total) + '<span>매도세후</span>' + usd(c.usd_total_after_tax) + '</div>' +
     '<table class="m"><thead><tr><th>상품</th><th>예치</th><th>비중</th><th>원금 해제분</th><th>rebase interest</th><th>extra interest</th><th>USD</th><th>매도세후</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
 }
@@ -88,17 +88,31 @@ function renderStatus() {
 function render() { if (!DATA) return; renderStatus(); document.getElementById("view").innerHTML = _sel ? renderDetail(_sel) : renderSummary(); }
 
 // ── 데이터 조립 (Python api_payload 대응) ──
+// DISPLAY의 정적 매도세 위에 온체인 실측값을 덮어씀(읽기 실패한 체인만 config 유지). live 플래그도 전달.
+function effectiveCfg() {
+  const st = S.sellTax || {};
+  return {
+    ...DISPLAY,
+    sell_tax: {
+      polygon: (st.polygon != null) ? st.polygon : DISPLAY.sell_tax.polygon,
+      anubis:  (st.anubis  != null) ? st.anubis  : DISPLAY.sell_tax.anubis,
+    },
+    sell_tax_live: { polygon: st.polygon != null, anubis: st.anubis != null },
+  };
+}
+
 function buildDATA() {
   const all = S.results.flatMap(r => r.positions || []);
+  const cfg = effectiveCfg();
   DATA = {
     now: Math.floor(Date.now() / 1000),
     prices: S.prices,
     scanning: S.scanning,
     scan_completed_at: S.scanAt,
-    summary: aggregate(all, DISPLAY, S.prices),
-    wallets: buildWallets(S.results, DISPLAY, S.prices, shortAddr),
+    summary: aggregate(all, cfg, S.prices),
+    wallets: buildWallets(S.results, cfg, S.prices, shortAddr),
   };
-  try { localStorage.setItem(LS_CACHE, JSON.stringify({ results: S.results, prices: S.prices, scanAt: S.scanAt })); } catch {}
+  try { localStorage.setItem(LS_CACHE, JSON.stringify({ results: S.results, prices: S.prices, sellTax: S.sellTax, scanAt: S.scanAt })); } catch {}
 }
 
 async function scanAll() {
@@ -110,6 +124,7 @@ async function scanAll() {
       scanWallet(w.addr).then(r => ({ ...r, label: w.label })).catch(() => ({ wallet: w.addr, label: w.label, positions: [], errors: ['scan failed'] }))
     ));
     S.prices = await fetchPrices().catch(() => null);
+    S.sellTax = await fetchSellTax().catch(() => null); // 온체인 매도세 실측(체인별, 실패 시 null→config fallback)
   }
   S.scanAt = new Date().toISOString();
   S.scanning = false;
@@ -139,7 +154,7 @@ function clearW() {
 if (typeof document !== 'undefined') {
   // 이식한 템플릿의 inline onclick(go/rescan/addW/clearW)을 위해 전역 노출
   window.go = go; window.rescan = rescan; window.addW = addW; window.clearW = clearW;
-  try { const c = JSON.parse(localStorage.getItem(LS_CACHE) || 'null'); if (c) { S.results = c.results || []; S.prices = c.prices || null; S.scanAt = c.scanAt || null; buildDATA(); } } catch {}
+  try { const c = JSON.parse(localStorage.getItem(LS_CACHE) || 'null'); if (c) { S.results = c.results || []; S.prices = c.prices || null; S.sellTax = c.sellTax || null; S.scanAt = c.scanAt || null; buildDATA(); } } catch {}
   window.addEventListener("DOMContentLoaded", () => {
     render();
     scanAll();

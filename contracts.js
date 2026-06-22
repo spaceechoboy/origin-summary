@@ -50,6 +50,9 @@ export const CONTRACTS = {
       pendingPayout: "0xda709204", balanceForGons: "0x7965d56d"
     },
     _turbine: { turbineBal: "0x780ce197", percentVestedFor: "0x6e979c6a" },
-    _lp: { getReserves: "0x0902f1ac" }
+    _lp: { getReserves: "0x0902f1ac" },
+    // 매도세 온체인 실측: 매도세 = 1-(1-feeRatio/1e5)(1-extraFeeRatio/1e5). PRECISION=1e5.
+    // Polygon LGNS는 extraFeeRatio 변수 부재(→0, 5% 고정). Anubis는 둘 다 있음(가변, 현 28.75%).
+    _fee: { feeRatio: "0x41744dd4", extraFeeRatio: "0x3c336ff4" }
   }
 };
