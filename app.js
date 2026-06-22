@@ -24,7 +24,8 @@ function ago(iso, now) { let t = Date.parse(iso) / 1000; if (!t) return "never";
 
 // ── 렌더 (dashboard.py 그대로, DATA를 읽음) ──
 function pct(v, total) { return total > 0 ? ((Number(v) || 0) / total * 100).toFixed(1) + '%' : '—'; }
-const COLOR = { polygon: "#ff4d4d", anubis: "#39ff14" }; // Polygon=붉은색, Anubis=네온 그린
+// Vault 정본 심볼 색(99_Meta/origin-symbol-logo.md): Polygon=적색 오리지널 #EB4323, Anubis=네온 #9FE870
+const COLOR = { polygon: "#EB4323", anubis: "#9FE870" };
 function go(sel) {
   _sel = sel;
   document.getElementById("tab-sum").className = "tab" + (sel ? "" : " on");
