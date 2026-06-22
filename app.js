@@ -1,259 +1,142 @@
-// app.js — Origin Summary UI (state + DOM). 온체인 로직은 src/*에 위임.
-// Controller Resolution #1: 매도세 토글 UI 제거 (v1). applySellTax는 export 유지(예약).
-// Controller Resolution #2: USD/KRW 토글 유지. 체인별 시세로 USD 산출.
-// Controller Resolution #3: 캐시-먼저 로드 → 백그라운드 refreshAll().
-
+// app.js — LGNS Summary UI. Wallet Monitor(dashboard.py)의 화면을 그대로 이식하고
+// 데이터 소스만 Python 서버 → 브라우저 스캐너 + localStorage로 교체.
+// 온체인 로직은 src/*에 위임. read-only.
 import { scanWallet } from './src/scanner.js';
-import { aggregateAll, aggregateWallet } from './src/aggregate.js';
+import { aggregate, buildWallets } from './src/aggregate.js';
+import { DISPLAY } from './src/display.js';
 import { fetchPrices } from './src/prices.js';
 import { isAddress, looksLikePrivateKey } from './src/codec.js';
 
-// ── 순수 헬퍼 (테스트 대상) ──────────────────────────────────────────
+const LS_WALLETS = 'os_wallets', LS_CACHE = 'os_cache';
+let DATA = null, _sel = null;
+const S = { wallets: loadWallets(), prices: null, scanning: false, scanAt: null, results: [] };
 
-/**
- * LGNS 수량 + 시세 + 환율을 받아 화면용 문자열로 변환.
- * @param {number} lgns - LGNS 수량
- * @param {number|null} price - USD 시세 (null이면 '—' 반환)
- * @param {number} fx - KRW 환율
- * @param {'usd'|'krw'} mode
- */
-export function fmtUsd(lgns, price, fx, mode) {
-  if (price == null) return '—';
-  const usd = lgns * price;
-  if (mode === 'krw') return '₩' + Math.round(usd * (fx || 0)).toLocaleString('en-US');
-  return '$' + usd.toFixed(2);
+function loadWallets() { try { return JSON.parse(localStorage.getItem(LS_WALLETS) || '[]'); } catch { return []; } }
+function saveWallets() { try { localStorage.setItem(LS_WALLETS, JSON.stringify(S.wallets)); } catch {} }
+function shortAddr(a) { return a.slice(0, 6) + '…' + a.slice(-4); }
+
+// ── 포맷 헬퍼 (dashboard.py 그대로) ──
+function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+function f2(n) { return (Number(n) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function f0(n) { return Math.round(Number(n) || 0).toLocaleString("en-US"); }
+function usd(n) { return n == null ? '<span class="dim">—</span>' : '<span class="usd">$' + f0(n) + '</span>'; }
+function ago(iso, now) { let t = Date.parse(iso) / 1000; if (!t) return "never"; let s = Math.max(0, now - Math.floor(t)); if (s < 60) return s + "s"; if (s < 3600) return Math.floor(s / 60) + "m"; if (s < 86400) return Math.floor(s / 3600) + "h"; return Math.floor(s / 86400) + "d"; }
+
+// ── 렌더 (dashboard.py 그대로, DATA를 읽음) ──
+const COLOR = { polygon: "#a06bff", anubis: "#f0b429" };
+function go(sel) {
+  _sel = sel;
+  document.getElementById("tab-sum").className = "tab" + (sel ? "" : " on");
+  document.getElementById("tab-det").className = "tab" + (sel ? " on" : "");
+  render();
 }
-
-/**
- * 매도세 차감 (v2 예약, v1 UI에서 미사용).
- * @param {number} lgns
- * @param {number} sellTaxPct - 0~100
- */
-export function applySellTax(lgns, sellTaxPct) {
-  return lgns * (1 - (sellTaxPct || 0) / 100);
+function donut(chains) {
+  let tot = chains.reduce((a, c) => a + c.principal_lgns, 0) || 1, off = 0, segs = "", C = 439.8;
+  chains.forEach(c => { let len = c.principal_lgns / tot * C; segs += '<circle cx="90" cy="90" r="70" fill="none" stroke="' + c.color + '" stroke-width="22" stroke-dasharray="' + len.toFixed(1) + ' ' + C + '" stroke-dashoffset="' + (-off).toFixed(1) + '" transform="rotate(-90 90 90)"/>'; off += len; });
+  return '<svg viewBox="0 0 180 180" width="168" height="168"><circle cx="90" cy="90" r="70" fill="none" stroke="#1c2230" stroke-width="22"/>' + segs +
+    '<text x="90" y="84" text-anchor="middle" fill="#c9d1d9" font-size="16" font-weight="800">' + f0(tot) + '</text><text x="90" y="103" text-anchor="middle" fill="#8b949e" font-size="9">LGNS · 명목합</text></svg>';
 }
-
-/**
- * 주소 6자+…+4자 축약.
- * @param {string} a - 0x로 시작하는 지갑 주소
- */
-export function shortAddr(a) {
-  return a.slice(0, 6) + '…' + a.slice(-4);
+function renderSummary() {
+  let s = DATA.summary, n = s.notional, chs = Object.keys(s.chains).map(k => { let c = s.chains[k]; return { key: k, name: c.name, principal_lgns: c.principal_lgns, color: COLOR[k] || "#888" }; }).filter(c => c.principal_lgns > 0);
+  let tot = n.principal_lgns || 0;
+  let lgd = chs.map(c => '<div class="li"><span class="sw" style="background:' + c.color + '"></span><span class="nm">' + esc(c.name) + '</span><b>' + f2(c.principal_lgns) + '</b><span class="pc">' + (tot ? (c.principal_lgns / tot * 100).toFixed(1) : 0) + '%</span></div>').join("");
+  let html = '<div class="sum"><div>' + donut(chs) + '</div><div style="flex:1 1 280px"><div class="big">' + f2(tot) + '<span class="u">LGNS 보유 (명목 합산)</span></div>' +
+    '<div class="meta">지갑 ' + f0(n.wallet_count) + ' · 포지션 ' + f0(n.position_count) + ' · ' + f0(n.chain_count) + '체인 ⚠ 체인 간 LGNS는 별개 토큰 — 명목 합</div>' +
+    '<div class="lgd">' + lgd + '</div><div class="red">redeem가능(명목) <b>' + f2(n.redeemable_lgns) + ' LGNS</b> · ' + usd(n.usd) + ' → 매도세후 ' + usd(n.usd_after_tax) + '</div></div></div>';
+  if (!DATA.wallets.length) { return html + '<div class="empty">등록된 지갑이 없습니다. 아래 "+ 지갑 추가"로 등록하세요.</div>'; }
+  html += '<p style="color:#8b949e;font-size:11px;margin:4px 0">지갑 선택 (클릭 → 상세):</p><div class="chips">';
+  DATA.wallets.forEach(w => { html += '<div class="chip" onclick="go(\'' + esc(w.name) + '\')">' + esc(w.name) + ' <b>' + f0(w.principal_lgns) + '</b><span class="s">' + w.chains_present.map(c => c === "polygon" ? "▣Poly" : "▪Anu").join(" ") + '</span></div>'; });
+  return html + '</div>';
 }
+function chainBlock(c) {
+  let rows = c.products.map(p => {
+    let reb = p.rebase_lgns ? '<span class="pur">' + f2(p.rebase_lgns) + '</span>' : '<span class="dim">—</span>';
+    let ext = p.extra_lgns ? '<span class="pur">' + f2(p.extra_lgns) + '</span>' : '<span class="dim">—</span>';
+    let cd = "";
+    if (p.cooldown_lgns > 0) { let left = p.cooldown_unlock - DATA.now; let rem = left > 0 ? (" 해제 " + Math.floor(left / 3600) + "h" + Math.floor((left % 3600) / 60) + "m") : ""; cd = ' <span class="yel" style="font-size:10px">· 쿨다운 ' + f2(p.cooldown_lgns) + rem + '</span>'; }
+    return '<tr><td>' + esc(p.label) + ' <span class="cnt">' + p.count + '</span>' + cd + '</td><td>' + f2(p.principal_lgns) + '</td><td class="grn">' + f2(p.unlocked_lgns) + '</td><td>' + reb + '</td><td>' + ext + '</td><td>' + usd(p.usd) + '</td><td>' + usd(p.usd_after_tax) + '</td></tr>';
+  }).join("");
+  return '<div class="chain"><div class="chead"><div class="nm"><span class="dot" style="background:' + (COLOR[c.key] || "#888") + '"></span>' + esc(c.name) + ' <span class="ct">· 매도세 ' + (c.sell_tax * 100).toFixed(2) + '%</span></div><div class="ct">' + c.position_count + ' 포지션</div></div>' +
+    '<div class="chsum"><span>예치</span><b>' + f2(c.principal_lgns) + '</b><span>redeem가능</span><b class="grn">' + f2(c.redeemable_lgns) + '</b><span>USD</span>' + usd(c.usd) + '<span>매도세후</span>' + usd(c.usd_after_tax) + '</div>' +
+    '<table class="m"><thead><tr><th>상품</th><th>예치</th><th>원금 해제분</th><th>rebase interest</th><th>extra interest</th><th>USD</th><th>매도세후</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+}
+function renderDetail(name) {
+  let w = (DATA.wallets || []).filter(x => x.name === name)[0];
+  if (!w) return '<div class="empty">지갑을 찾을 수 없습니다.</div>';
+  let html = '<span class="back" onclick="go(null)">← 요약으로</span>' +
+    '<div class="chead" style="border-radius:8px;margin-bottom:10px"><div class="nm">' + esc(w.name) + ' <span class="ct">' + esc(w.address) + '</span></div><div class="ct">' + f2(w.principal_lgns) + ' LGNS</div></div>';
+  Object.keys(w.detail.chains).forEach(k => { let c = w.detail.chains[k]; if (c.position_count > 0) html += chainBlock(c); });
+  return html;
+}
+function renderStatus() {
+  if (!DATA) return;
+  let p = ["scan " + ago(DATA.scan_completed_at, DATA.now) + " ago"];
+  if (DATA.prices && DATA.prices.polygon) p.push("LGNS $" + Number(DATA.prices.polygon).toFixed(2));
+  if (DATA.scanning) p.push("⟳ 스캔 중…");
+  const st = document.getElementById("status"); if (st) st.textContent = p.join("  ·  ");
+  const b = document.getElementById("rescan"); if (b) { b.disabled = !!DATA.scanning; b.textContent = DATA.scanning ? "⟳ 스캔 중…" : "↻ 즉시 스캔"; }
+}
+function render() { if (!DATA) return; renderStatus(); document.getElementById("view").innerHTML = _sel ? renderDetail(_sel) : renderSummary(); }
 
-/**
- * walletResult → 렌더 입력 모델.
- * @param {{ wallet: string, label?: string, positions: Array }} wr
- * @returns {{ label: string, addr: string, holdingLgns: number, chains: object }}
- */
-export function walletCardModel(wr) {
-  const a = aggregateWallet(wr.positions || []);
-  return {
-    label: wr.label || '',
-    addr: shortAddr(wr.wallet),
-    holdingLgns: a.totalHoldingLgns,
-    chains: a.byChain
+// ── 데이터 조립 (Python api_payload 대응) ──
+function buildDATA() {
+  const all = S.results.flatMap(r => r.positions || []);
+  DATA = {
+    now: Math.floor(Date.now() / 1000),
+    prices: S.prices,
+    scanning: S.scanning,
+    scan_completed_at: S.scanAt,
+    summary: aggregate(all, DISPLAY, S.prices),
+    wallets: buildWallets(S.results, DISPLAY, S.prices, shortAddr),
   };
+  try { localStorage.setItem(LS_CACHE, JSON.stringify({ results: S.results, prices: S.prices, scanAt: S.scanAt })); } catch {}
 }
 
-// ── DOM 이하는 Node import 시 실행하지 않는다 ──────────────────────────
-
-if (typeof document !== 'undefined') {
-  // ── 상태 + localStorage ──
-  const LS_WALLETS = 'os_wallets';
-  const LS_CACHE   = 'os_cache';
-  const LS_MODE    = 'os_mode';
-
-  function lsGet(k) { try { return localStorage.getItem(k); } catch { return null; } }
-  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch {} }
-
-  const S = {
-    wallets: (() => { try { return JSON.parse(lsGet(LS_WALLETS) || '[]'); } catch { return []; } })(),
-    results: [],
-    prices: null,
-    mode: lsGet(LS_MODE) || 'usd'
-  };
-
-  // ── 지갑 추가 (보안 검증) ──
-  function addWallet(addr, label) {
-    addr = (addr || '').trim();
-    if (looksLikePrivateKey(addr)) throw new Error('개인키로 보이는 값은 입력할 수 없습니다 (주소만)');
-    if (!isAddress(addr)) throw new Error('올바른 지갑 주소가 아닙니다');
-    if (S.wallets.some(w => w.addr.toLowerCase() === addr.toLowerCase())) return;
-    S.wallets.push({ addr, label: label || '' });
-    lsSet(LS_WALLETS, JSON.stringify(S.wallets));
-  }
-
-  // ── 온체인 스캔 + 시세 갱신 ──
-  async function refreshAll() {
-    const refreshBtn = document.getElementById('refreshBtn');
-    if (refreshBtn) { refreshBtn.disabled = true; refreshBtn.textContent = '새로고침 중…'; }
-
-    S.results = await Promise.all(
-      S.wallets.map(w =>
-        scanWallet(w.addr)
-          .then(r => ({ ...r, label: w.label }))
-          .catch(() => ({ wallet: w.addr, label: w.label, positions: [], errors: ['scan failed'] }))
-      )
-    );
-    lsSet(LS_CACHE, JSON.stringify(S.results));
-
+async function scanAll() {
+  S.scanning = true;
+  const b = document.getElementById("rescan"); if (b) { b.disabled = true; b.textContent = "⟳ 스캔 중…"; }
+  if (!S.wallets.length) { S.results = []; }
+  else {
+    S.results = await Promise.all(S.wallets.map(w =>
+      scanWallet(w.addr).then(r => ({ ...r, label: w.label })).catch(() => ({ wallet: w.addr, label: w.label, positions: [], errors: ['scan failed'] }))
+    ));
     S.prices = await fetchPrices().catch(() => null);
+  }
+  S.scanAt = new Date().toISOString();
+  S.scanning = false;
+  buildDATA(); render();
+}
+function rescan() { scanAll(); }
+function addW() {
+  const a = (document.getElementById("aw-addr").value || "").trim();
+  const n = (document.getElementById("aw-name").value || "").trim();
+  const m = document.getElementById("aw-msg");
+  if (looksLikePrivateKey(a)) { m.textContent = "✗ 개인키 형태는 입력 불가 (주소만)"; m.style.color = "#f85149"; return; }
+  if (!isAddress(a)) { m.textContent = "✗ 올바른 주소(0x+40hex)가 아닙니다"; m.style.color = "#f85149"; return; }
+  if (S.wallets.some(w => w.addr.toLowerCase() === a.toLowerCase())) { m.textContent = "이미 등록된 지갑입니다"; m.style.color = "#d29922"; return; }
+  S.wallets.push({ addr: a, label: n }); saveWallets();
+  m.textContent = "✓ 추가됨: " + (n || shortAddr(a)); m.style.color = "#3fb950";
+  document.getElementById("aw-addr").value = ""; document.getElementById("aw-name").value = "";
+  scanAll();
+}
+function clearW() {
+  if (!confirm("등록 지갑을 전부 비웁니다(이 브라우저에서만, 복구 불가). 진행?")) return;
+  S.wallets = []; saveWallets(); S.results = []; S.prices = null; _sel = null;
+  try { localStorage.removeItem(LS_CACHE); } catch {}
+  buildDATA(); go(null);
+}
 
+// ── 초기화: 캐시 먼저 그리고 백그라운드 스캔 (브라우저에서만) ──
+if (typeof document !== 'undefined') {
+  // 이식한 템플릿의 inline onclick(go/rescan/addW/clearW)을 위해 전역 노출
+  window.go = go; window.rescan = rescan; window.addW = addW; window.clearW = clearW;
+  try { const c = JSON.parse(localStorage.getItem(LS_CACHE) || 'null'); if (c) { S.results = c.results || []; S.prices = c.prices || null; S.scanAt = c.scanAt || null; buildDATA(); } } catch {}
+  window.addEventListener("DOMContentLoaded", () => {
     render();
-    if (refreshBtn) { refreshBtn.disabled = false; refreshBtn.textContent = '새로고침'; }
-  }
-
-  // ── 상세 행 HTML 생성 ──
-  function detailRows(positions) {
-    const visible = (positions || []).filter(p => (p.holdingLgns || p.pendingLgns || 0) > 0);
-    if (!visible.length) return '<div class="row dim">포지션 없음</div>';
-
-    return visible.map(p => {
-      const amt = (p.holdingLgns || p.pendingLgns || 0).toFixed(4);
-      let html = `<div class="row">
-        <span class="pos-label">[${p.chain}] ${p.contractName || p.positionType}</span>
-        <span class="pos-amt">${amt} LGNS</span>
-      </div>`;
-      if ((p.cooldownLgns || 0) > 0) {
-        const unlockDate = p.cooldownUnlock
-          ? new Date(p.cooldownUnlock * 1000).toLocaleString('ko-KR')
-          : '—';
-        html += `<div class="row sub">쿨다운 ${p.cooldownLgns.toFixed(4)} LGNS (해제 ${unlockDate})</div>`;
-      }
-      return html;
-    }).join('');
-  }
-
-  // ── 메인 렌더 ──
-  function render() {
-    const agg = aggregateAll(S.results);
-    const p = S.prices || {};
-
-    // Controller Resolution #2: 체인별 시세로 USD 산출
-    const usd =
-      (agg.byChain.polygon.holdingLgns * (p.polygon || 0)) +
-      (agg.byChain.anubis.holdingLgns  * (p.anubis  || 0));
-
-    // 총액 표시 (Controller Resolution #1: 매도세 적용 없음)
-    const totalEl = document.getElementById('total');
-    if (totalEl) {
-      if (S.mode === 'krw') {
-        totalEl.textContent = '₩' + Math.round(usd * (p.fxKrw || 0)).toLocaleString('en-US');
-      } else {
-        totalEl.textContent = '$' + usd.toFixed(2);
-      }
-    }
-
-    // 모드 버튼 라벨
-    const modeBtn = document.getElementById('modeBtn');
-    if (modeBtn) modeBtn.textContent = S.mode === 'usd' ? 'KRW로 보기' : 'USD로 보기';
-
-    // 지갑 카드
-    const cardsEl = document.getElementById('cards');
-    if (!cardsEl) return;
-    cardsEl.innerHTML = '';
-
-    if (!S.wallets.length) {
-      cardsEl.innerHTML = '<div class="empty-msg">지갑 주소를 추가하면 포지션이 표시됩니다.</div>';
-      return;
-    }
-
-    for (const wr of S.results) {
-      const m = walletCardModel(wr);
-      const card = document.createElement('div');
-      card.className = 'card';
-
-      const totalLgns = m.holdingLgns;
-      const cardUsd = (m.chains.polygon.holdingLgns * (p.polygon || 0)) +
-                      (m.chains.anubis.holdingLgns  * (p.anubis  || 0));
-      const cardVal = S.mode === 'krw'
-        ? '₩' + Math.round(cardUsd * (p.fxKrw || 0)).toLocaleString('en-US')
-        : '$' + cardUsd.toFixed(2);
-
-      card.innerHTML = `
-        <div class="card-head" role="button" tabindex="0" aria-expanded="false">
-          <div class="card-name">${m.label ? `<span class="label">${m.label}</span>` : ''}<span class="addr">${m.addr}</span></div>
-          <div class="card-val">
-            <span class="lgns-amt">${totalLgns.toFixed(4)} LGNS</span>
-            <span class="usd-amt">${cardVal}</span>
-          </div>
-          <span class="chevron">▶</span>
-        </div>
-        <div class="card-detail" hidden></div>
-      `;
-
-      const head   = card.querySelector('.card-head');
-      const detail = card.querySelector('.card-detail');
-      const chev   = card.querySelector('.chevron');
-
-      head.addEventListener('click', () => {
-        const open = !detail.hidden;
-        detail.hidden = open;
-        head.setAttribute('aria-expanded', String(!open));
-        chev.textContent = open ? '▶' : '▼';
-        if (!detail.dataset.built) {
-          detail.innerHTML = detailRows(wr.positions || []);
-          detail.dataset.built = '1';
-        }
-      });
-      head.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') head.click(); });
-
-      cardsEl.appendChild(card);
-    }
-
-    // 에러 표시
-    const errWallets = S.results.filter(r => r.errors && r.errors.length);
-    const errBanner = document.getElementById('errBanner');
-    if (errBanner) {
-      if (errWallets.length) {
-        errBanner.textContent = `스캔 실패 지갑: ${errWallets.map(r => shortAddr(r.wallet)).join(', ')}`;
-        errBanner.hidden = false;
-      } else {
-        errBanner.hidden = true;
-      }
-    }
-  }
-
-  // ── DOM 이벤트 배선 ──
-  window.addEventListener('DOMContentLoaded', () => {
-    // Controller Resolution #3: 캐시 즉시 표시
-    try { S.results = JSON.parse(lsGet(LS_CACHE) || '[]'); } catch {}
-    render();
-
-    // 백그라운드 새로고침
-    refreshAll();
-
-    // USD/KRW 토글
-    document.getElementById('modeBtn')?.addEventListener('click', () => {
-      S.mode = S.mode === 'usd' ? 'krw' : 'usd';
-      lsSet(LS_MODE, S.mode);
-      render();
-    });
-
-    // 지갑 추가
-    document.getElementById('wAdd')?.addEventListener('click', () => {
-      const addrEl  = document.getElementById('wAddr');
-      const labelEl = document.getElementById('wLabel');
-      const errEl   = document.getElementById('wErr');
-      if (!addrEl) return;
-      try {
-        addWallet(addrEl.value, labelEl?.value || '');
-        addrEl.value  = '';
-        if (labelEl) labelEl.value = '';
-        if (errEl)   errEl.textContent = '';
-        refreshAll();
-      } catch (err) {
-        if (errEl) errEl.textContent = err.message;
-      }
-    });
-
-    // Enter 키로도 추가
-    document.getElementById('wAddr')?.addEventListener('keydown', e => {
-      if (e.key === 'Enter') document.getElementById('wAdd')?.click();
-    });
-
-    // 새로고침 버튼
-    document.getElementById('refreshBtn')?.addEventListener('click', () => refreshAll());
+    scanAll();
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
   });
 }
+
+// 테스트용 export (순수 헬퍼)
+export { shortAddr };

@@ -1,21 +1,13 @@
-// tests/render.test.js — 순수 렌더 헬퍼 unit tests (TDD Step 1)
+// tests/render.test.js — app.js 순수 헬퍼 + Node import 안전성(top-level DOM 접근 없음).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fmtUsd, applySellTax, walletCardModel } from '../app.js';
+import { shortAddr } from '../app.js';
 
-test('fmtUsd: USD/KRW 모드', () => {
-  assert.equal(fmtUsd(100, 2, 1400, 'usd'), '$200.00');
-  assert.equal(fmtUsd(100, 2, 1400, 'krw'), '₩280,000');
-  assert.equal(fmtUsd(100, null, 1400, 'usd'), '—'); // 시세 없음
+test('app.js: Node에서 import 가능(top-level DOM/window 접근 없음)', () => {
+  // import가 throw 없이 성공한 것 자체가 검증. shortAddr이 노출되면 OK.
+  assert.equal(typeof shortAddr, 'function');
 });
-test('applySellTax: 매도세 차감', () => {
-  assert.equal(applySellTax(100, 10), 90);
-  assert.equal(applySellTax(100, 0), 100);
-});
-test('walletCardModel: 요약 모델', () => {
-  const wr = { wallet: '0xABCD000000000000000000000000000000001234', label: 'main',
-    positions: [{ chain: 'polygon', holdingLgns: 50, positionType: 'long_stake' }] };
-  const m = walletCardModel(wr);
-  assert.equal(m.holdingLgns, 50);
-  assert.equal(m.addr, '0xABCD…1234');
+
+test('shortAddr: 0x앞6 … 뒤4', () => {
+  assert.equal(shortAddr('0x59A26bB8c1F6880991EAbc3Ae1b7937E3563D21d'), '0x59A2…D21d');
 });
