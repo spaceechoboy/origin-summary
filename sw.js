@@ -1,6 +1,6 @@
 /* Origin Summary PWA service worker — 앱 셸 캐시(설치형 PWA) + network-first.
    외부 RPC/API/CDN은 통과(캐시 안 함). */
-const CACHE = 'lgns-summary-v2';
+const CACHE = 'lgns-summary-v3';
 const SHELL = [
   './', './index.html', './app.js', './contracts.js',
   './src/codec.js', './src/rpc.js', './src/scan_long.js', './src/scan_tokens.js',
