@@ -55,3 +55,26 @@ test('flexible+community 모두 0이면 포지션 없음', async () => {
   const ps = await scanAnubisExtra(W, async () => word(0));
   assert.equal(ps.length, 0);
 });
+
+const BB_ADDR = '0x11b10c9827c5b7071e96fcaa143b4e6e86b17c69'; // burn bond 컨트랙트(소문자)
+
+test('burn_bond: 단일 getter — 원금 DAI · 250% 총지급 · 소각 LGNS', async () => {
+  // 0xac541224=원금 100 DAI(18dec), 0xb79215d6=소각 50 LGNS(9dec) — burn bond 주소로만.
+  const call = async (to, data) => {
+    if (to.toLowerCase() === BB_ADDR && data.startsWith('0xac541224')) return '0x' + i32(100n * 10n ** 18n);
+    if (to.toLowerCase() === BB_ADDR && data.startsWith('0xb79215d6')) return '0x' + i32(50n * 10n ** 9n);
+    return word(0);
+  };
+  const ps = await scanAnubisExtra(W, call);
+  const bb = ps.find((p) => p.positionType === 'burn_bond');
+  assert.equal(bb.principalDai, 100);
+  assert.equal(bb.totalOwedDai, 250);  // 100 × 250%
+  assert.equal(bb.burnedLgns, 50);
+  assert.equal(bb.ratePct, 250);
+  assert.equal(bb.holdingLgns, 0);     // DAI 표시 → LGNS holding 0(중복계산 방지)
+});
+
+test('burn_bond: 원금 0이면 포지션 없음', async () => {
+  const ps = await scanAnubisExtra(W, async () => word(0));
+  assert.equal(ps.find((p) => p.positionType === 'burn_bond'), undefined);
+});

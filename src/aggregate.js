@@ -16,6 +16,7 @@ function aggregateProducts(positions, chain, cfg, price) {
   const tax = (cfg.sell_tax || {})[chain] || 0;
   const groups = new Map(); // 삽입 순서 보존
   for (const p of positions) {
+    if (p.positionType === 'burn_bond') continue; // 소각채권은 DAI 표시 → 전용 라인(§burn_bond)
     const cn = p.contractName || "?";
     let g = groups.get(cn);
     if (!g) { g = { count: 0, principal: 0, holding: 0, redeem: 0, rebase: 0, extra: 0, cooldown: 0, cd_unlock: 0 }; groups.set(cn, g); }
@@ -66,7 +67,20 @@ export function aggregate(positions, cfg, prices) {
     const redeem = cps.reduce((a, p) => a + redeemable(p), 0);
     const usd = usdOf(redeem, price);
     const holdingTotal = cps.reduce((a, p) => a + (Number(p.holdingLgns) || 0), 0);
-    const usdTotal = usdOf(holdingTotal, price);
+    const usdTotalBase = usdOf(holdingTotal, price);
+    // 소각채권(DAI 표시) — 전용 요약 + USD(전체)에 가산. DAI≈$1. 매도세후=총지급×(1-tax)(LGNS로 받아 매도 가정).
+    const bbPos = cps.filter((p) => p.positionType === 'burn_bond');
+    let burnBond = null;
+    if (bbPos.length) {
+      const principalDai = bbPos.reduce((a, p) => a + (Number(p.principalDai) || 0), 0);
+      const totalOwedDai = bbPos.reduce((a, p) => a + (Number(p.totalOwedDai) || 0), 0);
+      const burnedLgns = bbPos.reduce((a, p) => a + (Number(p.burnedLgns) || 0), 0);
+      const bbUsd = round(totalOwedDai, 4);
+      burnBond = { principalDai: round(principalDai, 6), totalOwedDai: round(totalOwedDai, 6), burnedLgns: round(burnedLgns, 6), usd: bbUsd, usd_after_tax: afterTax(bbUsd, tax) };
+    }
+    const usdTotal = (usdTotalBase == null && !burnBond) ? null : round((usdTotalBase || 0) + (burnBond ? burnBond.usd : 0), 4);
+    const usdTotalAfterBase = afterTax(usdTotalBase, tax);
+    const usdTotalAfter = (usdTotalAfterBase == null && !burnBond) ? null : round((usdTotalAfterBase || 0) + (burnBond ? (burnBond.usd_after_tax || 0) : 0), 4);
     chains[ck] = {
       key: ck,
       name: (chainsMeta[ck] || {}).name || ck,
@@ -82,7 +96,8 @@ export function aggregate(positions, cfg, prices) {
       usd,
       usd_after_tax: afterTax(usd, tax),
       usd_total: usdTotal,
-      usd_total_after_tax: afterTax(usdTotal, tax),
+      usd_total_after_tax: usdTotalAfter,
+      burn_bond: burnBond,
       products: aggregateProducts(cps, ck, cfg, price),
     };
   }

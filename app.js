@@ -60,8 +60,10 @@ function chainBlock(c, walletTotal) {
     if (p.cooldown_lgns > 0) { let left = p.cooldown_unlock - DATA.now; let rem = left > 0 ? (" 해제 " + Math.floor(left / 3600) + "h" + Math.floor((left % 3600) / 60) + "m") : ""; cd = ' <span class="yel" style="font-size:10px">· 쿨다운 ' + f2(p.cooldown_lgns) + rem + '</span>'; }
     return '<tr><td>' + esc(p.label) + ' <span class="cnt">' + p.count + '</span>' + cd + '</td><td>' + f2(p.principal_lgns) + '</td><td class="dim">' + pct(p.principal_lgns, walletTotal) + '</td><td class="grn">' + f2(p.unlocked_lgns) + '</td><td>' + reb + '</td><td>' + ext + '</td><td>' + usd(p.usd_total) + '</td><td>' + usd(p.usd_total_after_tax) + '</td></tr>';
   }).join("");
+  const b = c.burn_bond;
+  const bbLine = b ? ('<div class="chsum" style="background:#1a1206"><span>🔥 소각채권</span><span>원금</span><b>' + f2(b.principalDai) + ' DAI</b><span>총 지급예정(' + (b.principalDai > 0 ? Math.round(b.totalOwedDai / b.principalDai * 100) : 250) + '%)</span><b class="grn">' + f2(b.totalOwedDai) + ' DAI</b><span>≈</span>' + usd(b.usd) + '<span>매도세후</span>' + usd(b.usd_after_tax) + '</div>') : '';
   return '<div class="chain"><div class="chead"><div class="nm"><span class="dot" style="background:' + (COLOR[c.key] || "#888") + '"></span>' + esc(c.name) + ' <span class="ct">· 매도세 ' + (c.sell_tax * 100).toFixed(2) + '% ' + (c.sell_tax_live ? '<span style="color:#7ee787">⚡실시간</span>' : '<span class="dim">config</span>') + '</span></div><div class="ct">' + c.position_count + ' 포지션 · 지갑 내 ' + pct(c.principal_lgns, walletTotal) + '</div></div>' +
-    '<div class="chsum"><span>예치</span><b>' + f2(c.principal_lgns) + '</b><span>비중</span><b>' + pct(c.principal_lgns, walletTotal) + '</b><span>redeem가능</span><b class="grn">' + f2(c.redeemable_lgns) + '</b><span>USD(전체)</span>' + usd(c.usd_total) + '<span>매도세후</span>' + usd(c.usd_total_after_tax) + '</div>' +
+    '<div class="chsum"><span>예치</span><b>' + f2(c.principal_lgns) + '</b><span>비중</span><b>' + pct(c.principal_lgns, walletTotal) + '</b><span>redeem가능</span><b class="grn">' + f2(c.redeemable_lgns) + '</b><span>USD(전체)</span>' + usd(c.usd_total) + '<span>매도세후</span>' + usd(c.usd_total_after_tax) + '</div>' + bbLine +
     '<table class="m"><thead><tr><th>상품</th><th>예치</th><th>비중</th><th>원금 해제분</th><th>rebase interest</th><th>extra interest</th><th>USD</th><th>매도세후</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
 }
 function renderDetail(name) {
@@ -161,13 +163,9 @@ if (typeof document !== 'undefined') {
     try { if (localStorage.getItem('os_install_dismissed')) return; } catch (e) {}
     const ua = navigator.userAgent || '';
     const isIOS = /iPad|iPhone|iPod/.test(ua);
-    const isChromeIOS = isIOS && /CriOS/.test(ua);
-    const isOtherIOS = isIOS && /FxiOS|EdgiOS|OPiOS/.test(ua);
-    const isSafariIOS = isIOS && !isChromeIOS && !isOtherIOS;
     let msg = '';
-    if (isChromeIOS || isOtherIOS) msg = '📲 아이폰에선 이 브라우저로 앱 설치가 안 됩니다 — 메뉴에서 <b>"Safari에서 열기"</b> → 공유 〔□↑〕 → <b>"홈 화면에 추가"</b>';
-    else if (isSafariIOS) msg = '📲 설치: 하단 공유 〔□↑〕 → <b>"홈 화면에 추가"</b>';
-    else if (/Android/.test(ua)) msg = '📲 설치: 브라우저 메뉴 ⋮ → <b>"앱 설치"</b>';
+    if (isIOS) msg = '📲 <b>아이폰 설치</b>: 하단 공유 〔□↑〕 → <b>"홈 화면에 추가"</b>';
+    else if (/Android/.test(ua)) msg = '📲 <b>안드로이드 설치</b>: 메뉴 ⋮ → <b>"앱 설치"</b> (또는 "홈 화면에 추가")';
     else return;
     const bar = document.createElement('div'); bar.id = 'installHint';
     bar.innerHTML = '<span>' + msg + '</span><button type="button" id="ihX">닫기</button>';

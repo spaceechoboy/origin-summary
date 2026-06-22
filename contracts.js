@@ -39,6 +39,16 @@ export const CONTRACTS = {
       address: "0xf7a0cacdf0810609ee5618247c4121b799e41664",
       claimable_selector: "0x402914f5"
     },
+    // Burn&Bond 소각채권(2026-06-22 출시). 단일값 getter로 read(struct 0x2a5bf6d2는 동적 ABI라 회피):
+    // 0xac541224(addr)=원금 DAI(18dec) · 0xb79215d6(addr)=소각 LGNS(9dec) · 0x1bae91a4(addr)=채권 수.
+    // 총 지급 = 원금×250%(rate 25000/1e4, 운영자 가변·현 상수)를 312.5일 선형. 정본 vault anubis-burn-bond-mechanism.
+    burn_bond: {
+      address: "0x11b10C9827c5B7071E96fcAa143B4e6E86b17c69",
+      principal_dai_selector: "0xac541224",
+      burned_selector: "0xb79215d6",
+      count_selector: "0x1bae91a4",
+      rate_pct: 250
+    },
     dex: { lgns_dai_pair: "0x32A4586797E3f561F41C0F47CA57eD08D64f3dC0" }
   },
   function_selectors: {

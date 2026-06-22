@@ -55,6 +55,20 @@ test('aggregate: 가격 없으면 usd null (NaN 없음)', () => {
   assert.equal(a.notional.usd, null);
 });
 
+test('aggregate: 소각채권은 burn_bond 전용 + USD(전체)에 가산, 상품 테이블 제외', () => {
+  const bb = {
+    wallet: W1, chain: 'anubis', contractName: 'anubis_burnbond', positionType: 'burn_bond',
+    principalLgns: 0, holdingLgns: 0, pendingLgns: 0, interestLgns: 0, extraLgns: 0, claimableNow: false,
+    principalDai: 100, totalOwedDai: 250, burnedLgns: 50,
+  };
+  const a = aggregate([commAnu(W1), bb], DISPLAY, { polygon: null, anubis: 3 });
+  assert.equal(a.chains.anubis.burn_bond.totalOwedDai, 250);
+  assert.equal(a.chains.anubis.burn_bond.usd, 250); // DAI ≈ $1
+  assert.equal(a.chains.anubis.products.find((p) => p.key === 'anubis_burnbond'), undefined); // 테이블 제외
+  // USD(전체) = community holding 26*3(=78) + burn 250 = 328
+  assert.equal(a.chains.anubis.usd_total, 328);
+});
+
 test('buildWallets: 명목 보유 큰 순 정렬 + 지갑별 detail', () => {
   const results = [
     { wallet: W2, label: '작은지갑', positions: [commAnu(W2)] },        // principal 0
