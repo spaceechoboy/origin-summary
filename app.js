@@ -60,8 +60,14 @@ function chainBlock(c, walletTotal) {
     if (p.cooldown_lgns > 0) { let left = p.cooldown_unlock - DATA.now; let rem = left > 0 ? (" 해제 " + Math.floor(left / 3600) + "h" + Math.floor((left % 3600) / 60) + "m") : ""; cd = ' <span class="yel" style="font-size:10px">· 쿨다운 ' + f2(p.cooldown_lgns) + rem + '</span>'; }
     return '<tr><td>' + esc(p.label) + ' <span class="cnt">' + p.count + '</span>' + cd + '</td><td>' + f2(p.principal_lgns) + '</td><td class="dim">' + pct(p.principal_lgns, walletTotal) + '</td><td class="grn">' + f2(p.unlocked_lgns) + '</td><td>' + reb + '</td><td>' + ext + '</td><td>' + usd(p.usd_total) + '</td><td>' + usd(p.usd_total_after_tax) + '</td></tr>';
   }).join("");
-  const b = c.burn_bond;
-  const bbLine = b ? ('<div class="chsum" style="background:#1a1206"><span>🔥 소각채권</span><span>원금</span><b>' + f2(b.principalDai) + ' DAI</b><span>총 지급예정(' + (b.principalDai > 0 ? Math.round(b.totalOwedDai / b.principalDai * 100) : 250) + '%)</span><b class="grn">' + f2(b.totalOwedDai) + ' DAI</b><span>≈</span>' + usd(b.usd) + '<span>매도세후</span>' + usd(b.usd_after_tax) + '</div>') : '';
+  // 소각채권 — 율별(230%/250%) 분리 라인. 소각 LGNS 개수 + 드립 수령가능 표시.
+  const bbLine = ((c.burn_bond || {}).groups || []).map(g =>
+    '<div class="chsum" style="background:#1a1206"><span>🔥 소각채권 ' + (g.rate_pct == null ? '율 미상' : g.rate_pct + '%') + ' <span class="cnt">' + g.count + '</span></span>' +
+    '<span>원금</span><b>' + f2(g.principal_dai) + ' DAI</b>' +
+    '<span>총 지급예정</span><b class="grn">' + f2(g.total_owed_dai) + ' DAI</b>' +
+    '<span>소각</span><b>' + f2(g.burned_lgns) + ' LGNS</b>' +
+    (g.claimable_lgns > 0 ? '<span>드립가능</span><b class="grn">' + f2(g.claimable_lgns) + ' LGNS</b>' : '') +
+    '<span>≈</span>' + usd(g.usd) + '<span>매도세후</span>' + usd(g.usd_after_tax) + '</div>').join('');
   return '<div class="chain"><div class="chead"><div class="nm"><span class="dot" style="background:' + (COLOR[c.key] || "#888") + '"></span>' + esc(c.name) + ' <span class="ct">· 매도세 ' + (c.sell_tax * 100).toFixed(2) + '% ' + (c.sell_tax_live ? '<span style="color:#7ee787">⚡실시간</span>' : '<span class="dim">config</span>') + '</span></div><div class="ct">' + c.position_count + ' 포지션 · 지갑 내 ' + pct(c.principal_lgns, walletTotal) + '</div></div>' +
     '<div class="chsum"><span>예치</span><b>' + f2(c.principal_lgns) + '</b><span>비중</span><b>' + pct(c.principal_lgns, walletTotal) + '</b><span>redeem가능</span><b class="grn">' + f2(c.redeemable_lgns) + '</b><span>USD(전체)</span>' + usd(c.usd_total) + '<span>매도세후</span>' + usd(c.usd_total_after_tax) + '</div>' + bbLine +
     '<table class="m"><thead><tr><th>상품</th><th>예치</th><th>비중</th><th>원금 해제분</th><th>rebase interest</th><th>extra interest</th><th>USD</th><th>매도세후</th></tr></thead><tbody>' + rows + '</tbody></table></div>';

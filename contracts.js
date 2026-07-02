@@ -39,15 +39,20 @@ export const CONTRACTS = {
       address: "0xf7a0cacdf0810609ee5618247c4121b799e41664",
       claimable_selector: "0x402914f5"
     },
-    // Burn&Bond 소각채권(2026-06-22 출시). 단일값 getter로 read(struct 0x2a5bf6d2는 동적 ABI라 회피):
-    // 0xac541224(addr)=원금 DAI(18dec) · 0xb79215d6(addr)=소각 LGNS(9dec) · 0x1bae91a4(addr)=채권 수.
-    // 총 지급 = 원금×250%(rate 25000/1e4, 운영자 가변·현 상수)를 312.5일 선형. 정본 vault anubis-burn-bond-mechanism.
+    // Burn&Bond 소각채권(2026-06-22 출시). 율은 단일 250% 상수가 아니라 본드별 스냅샷:
+    // DAI계=250% / LGNS·터보계=230% (vault anubis-burn-bond-mechanism §3.5, 2026-06-29 정정).
+    // 본드별 read = getUserDeposits(addr) 0x2a5bf6d2 → [offset,len, 본드당 9워드]:
+    //   [0]=원금 DAI(1e18) [1]=율(23000/25000) [2]=소각 LGNS(1e9, 온체인 실증) [7]=start [8]=mode.
+    // 드립 수령가능 = getClaimable(addr,idx) 0x6f5244b1 (본드별, LGNS 1e9).
+    // ⚠ 0xb79215d6(getDepositorBalance)은 소각량이 아니라 드립에 따라 감소하는 잔여값 — 폴백 근사용으로만.
     burn_bond: {
       address: "0x11b10C9827c5B7071E96fcAa143B4e6E86b17c69",
+      deposits_selector: "0x2a5bf6d2",
+      claimable_by_index_selector: "0x6f5244b1",
       principal_dai_selector: "0xac541224",
       burned_selector: "0xb79215d6",
       count_selector: "0x1bae91a4",
-      rate_pct: 250
+      fallback_rate_pct: 250
     },
     dex: { lgns_dai_pair: "0x32A4586797E3f561F41C0F47CA57eD08D64f3dC0" }
   },

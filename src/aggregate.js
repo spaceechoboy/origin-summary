@@ -68,15 +68,41 @@ export function aggregate(positions, cfg, prices) {
     const usd = usdOf(redeem, price);
     const holdingTotal = cps.reduce((a, p) => a + (Number(p.holdingLgns) || 0), 0);
     const usdTotalBase = usdOf(holdingTotal, price);
-    // 소각채권(DAI 표시) — 전용 요약 + USD(전체)에 가산. DAI≈$1. 매도세후=총지급×(1-tax)(LGNS로 받아 매도 가정).
+    // 소각채권(DAI 표시) — 율별(230/250) 그룹 분리 + USD(전체)에 가산. DAI≈$1.
+    // 매도세후=총지급×(1-tax)(LGNS로 받아 매도 가정). 소각 LGNS는 principalLgns로 명목합/도넛에만 반영(USD 이중계산 없음).
     const bbPos = cps.filter((p) => p.positionType === 'burn_bond');
     let burnBond = null;
     if (bbPos.length) {
-      const principalDai = bbPos.reduce((a, p) => a + (Number(p.principalDai) || 0), 0);
-      const totalOwedDai = bbPos.reduce((a, p) => a + (Number(p.totalOwedDai) || 0), 0);
-      const burnedLgns = bbPos.reduce((a, p) => a + (Number(p.burnedLgns) || 0), 0);
+      const gm = new Map(); // ratePct → 그룹 누적
+      for (const p of bbPos) {
+        const r = (p.ratePct == null) ? -1 : Number(p.ratePct); // -1 = 율 미상(폴백)
+        let g = gm.get(r);
+        if (!g) { g = { count: 0, principalDai: 0, totalOwedDai: 0, burnedLgns: 0, claimableLgns: 0 }; gm.set(r, g); }
+        g.count += 1;
+        g.principalDai += Number(p.principalDai) || 0;
+        g.totalOwedDai += Number(p.totalOwedDai) || 0;
+        g.burnedLgns += Number(p.burnedLgns) || 0;
+        g.claimableLgns += Number(p.pendingLgns) || 0;
+      }
+      const groups = [...gm.entries()].sort((a, b) => a[0] - b[0]).map(([r, g]) => {
+        const gUsd = round(g.totalOwedDai, 4);
+        return {
+          rate_pct: r < 0 ? null : r, count: g.count,
+          principal_dai: round(g.principalDai, 6), total_owed_dai: round(g.totalOwedDai, 6),
+          burned_lgns: round(g.burnedLgns, 6), claimable_lgns: round(g.claimableLgns, 6),
+          usd: gUsd, usd_after_tax: afterTax(gUsd, tax),
+        };
+      });
+      const totalOwedDai = groups.reduce((a, g) => a + g.total_owed_dai, 0);
       const bbUsd = round(totalOwedDai, 4);
-      burnBond = { principalDai: round(principalDai, 6), totalOwedDai: round(totalOwedDai, 6), burnedLgns: round(burnedLgns, 6), usd: bbUsd, usd_after_tax: afterTax(bbUsd, tax) };
+      burnBond = {
+        groups,
+        principalDai: round(groups.reduce((a, g) => a + g.principal_dai, 0), 6),
+        totalOwedDai: round(totalOwedDai, 6),
+        burnedLgns: round(groups.reduce((a, g) => a + g.burned_lgns, 0), 6),
+        claimableLgns: round(groups.reduce((a, g) => a + g.claimable_lgns, 0), 6),
+        usd: bbUsd, usd_after_tax: afterTax(bbUsd, tax),
+      };
     }
     const usdTotal = (usdTotalBase == null && !burnBond) ? null : round((usdTotalBase || 0) + (burnBond ? burnBond.usd : 0), 4);
     const usdTotalAfterBase = afterTax(usdTotalBase, tax);
