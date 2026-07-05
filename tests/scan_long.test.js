@@ -38,7 +38,7 @@ test('scanLong: 단일 stake 세분(interest/unlocked/extra) 정확', async () =
   assert.equal(Number(p.interestLgns.toFixed(4)), 12.0447);
   assert.equal(p.unlockedPrincipalLgns, 5);
   assert.equal(p.extraLgns, 3);
-  assert.equal(Number(p.holdingLgns.toFixed(4)), 1015.0447); // principal+interest+extra
+  assert.equal(Number(p.holdingLgns.toFixed(4)), 1020.0447); // principal+interest+extra+unlocked(pendingPayout) — Dapp 정합
   assert.equal(p.claimableNow, true);
 });
 

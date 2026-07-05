@@ -118,6 +118,7 @@ export function aggregate(positions, cfg, prices) {
       position_count: cps.length,
       wallet_count: new Set(cps.map((p) => p.wallet)).size,
       principal_lgns: round(principal, 6),
+      holding_lgns: round(holdingTotal, 6),   // 현재가치(원금+리베이스+해제분+extra) — Dapp 정합
       redeemable_lgns: round(redeem, 6),
       usd,
       usd_after_tax: afterTax(usd, tax),
@@ -137,6 +138,7 @@ export function aggregate(positions, cfg, prices) {
     chain_count: list.filter((c) => c.position_count > 0).length,
     wallet_count: new Set(positions.map((p) => p.wallet)).size,
     principal_lgns: round(list.reduce((a, c) => a + c.principal_lgns, 0), 6),
+    holding_lgns: round(list.reduce((a, c) => a + (c.holding_lgns || 0), 0), 6),   // 현재가치 합 — Dapp 정합
     redeemable_lgns: round(list.reduce((a, c) => a + c.redeemable_lgns, 0), 6),
     usd: anyUsd ? round(list.reduce((a, c) => a + (c.usd || 0), 0), 4) : null,
     usd_after_tax: anyTax ? round(list.reduce((a, c) => a + (c.usd_after_tax || 0), 0), 4) : null,

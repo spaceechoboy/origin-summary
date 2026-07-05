@@ -45,6 +45,7 @@ function renderSummary() {
   let html = '<div class="sum"><div>' + donut(chs) + '</div><div style="flex:1 1 280px"><div class="big">' + f2(tot) + '<span class="u">LGNS 보유 (명목 합산)</span></div>' +
     '<div class="meta">지갑 ' + f0(n.wallet_count) + ' · 포지션 ' + f0(n.position_count) + ' · ' + f0(n.chain_count) + '체인 ⚠ 체인 간 LGNS는 별개 토큰 — 명목 합</div>' +
     '<div class="lgd">' + lgd + '</div>' +
+    '<div class="red">현재가치 <b>' + f2(n.holding_lgns) + ' LGNS</b> <span style="font-size:11px;color:#8b949e">(리베이스·해제분·extra 포함 · Dapp 정합)</span></div>' +
     '<div class="red">전체 보유가치 <b>' + usd(n.usd_total) + '</b> · 매도세후 <b>' + usd(n.usd_total_after_tax) + '</b></div>' +
     '<div class="red" style="font-size:12px;color:#8b949e">redeem가능(명목) ' + f2(n.redeemable_lgns) + ' LGNS · ' + usd(n.usd) + ' → 매도세후 ' + usd(n.usd_after_tax) + '</div></div></div>';
   if (!DATA.wallets.length) { return html + '<div class="empty">등록된 지갑이 없습니다. 아래 "+ 지갑 추가"로 등록하세요.</div>'; }

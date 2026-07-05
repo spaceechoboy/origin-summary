@@ -59,7 +59,10 @@ async function scanContract(wallet, chain, name, call) {
         principalLgns, interestLgns, unlockedPrincipalLgns, extraLgns,
         pendingLgns: interestLgns + unlockedPrincipalLgns + extraLgns,
         cooldownLgns: 0, cooldownUnlock: 0,
-        holdingLgns: principalLgns + interestLgns + extraLgns,   // value-model: unlocked 제외
+        // 현재가치 = balanceForGons(원금+리베이스) + 미청구 해제분(pendingPayout) + extra.
+        // Dapp 정합(2026-07-05 온체인 검증: 새출발1 = principal 8295.8 + 리베이스 890.2 +
+        // 해제분 404.3 + extra 129.4 ≈ Dapp 9715). 이전엔 unlocked 제외로 ~pending만큼 과소계상.
+        holdingLgns: principalLgns + interestLgns + extraLgns + unlockedPrincipalLgns,
         claimableNow: (pendingRaw > 0n || interestRaw > 0n || extraRaw > 0n),
         note: `${name} stake[${idx}] term=${meta.term_days}d`
       });
