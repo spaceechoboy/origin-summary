@@ -55,7 +55,7 @@ function renderSummary() {
   DATA.wallets.forEach(w => { html += '<div class="chip" onclick="go(\'' + esc(w.name) + '\')">' + esc(w.name) + ' <b>' + f0(w.holding_lgns) + '</b><span class="s">' + w.chains_present.map(c => c === "polygon" ? "▣Poly" : "▪Anu").join(" ") + '</span></div>'; });
   return html + '</div>';
 }
-function chainBlock(c, walletTotal) {
+function chainBlock(c, walletTotal, dappStaked) {
   let rows = c.products.map(p => {
     let reb = p.rebase_lgns ? '<span class="pur">' + f2(p.rebase_lgns) + '</span>' : '<span class="dim">—</span>';
     let ext = p.extra_lgns ? '<span class="pur">' + f2(p.extra_lgns) + '</span>' : '<span class="dim">—</span>';
@@ -73,8 +73,17 @@ function chainBlock(c, walletTotal) {
     '<span>소각</span><b>' + f2(g.burned_lgns) + ' LGNS</b>' +
     (g.claimable_lgns > 0 ? '<span>드립가능</span><b class="grn">' + f2(g.claimable_lgns) + ' LGNS</b>' : '') +
     '<span>≈</span>' + usd(g.usd) + '<span>매도세후</span>' + usd(g.usd_after_tax) + '</div>').join('');
+  // dApp Invite "Anubis Staked" 대조 줄 — 정의가 달라 값이 다른 게 정상이므로 차이와 이유를 함께 적는다.
+  let dappLine = '';
+  if (c.key === 'anubis' && dappStaked != null) {
+    const d = (c.holding_lgns || 0) - dappStaked;
+    dappLine = '<div class="chsum" style="background:#0d1420"><span>📱 dApp 초대탭 대조</span><b>' + f2(dappStaked) + ' LGNS</b>' +
+      '<span>우리 현재가치</span><b>' + f2(c.holding_lgns) + '</b>' +
+      '<span>차이</span><b class="yel">' + (d >= 0 ? '+' : '−') + f2(Math.abs(d)) + '</b>' +
+      '<span style="font-size:11px;color:#8b949e">dApp 값은 <b>추천 자격 지표</b>(장기 스테이킹 기준) — flexible·소각채권·Polygon 미포함. 자산 총액이 아닙니다.</span></div>';
+  }
   return '<div class="chain"><div class="chead"><div class="nm"><span class="dot" style="background:' + (COLOR[c.key] || "#888") + '"></span>' + esc(c.name) + ' <span class="ct">· 매도세 ' + (c.sell_tax * 100).toFixed(2) + '% ' + (c.sell_tax_live ? '<span style="color:#7ee787">⚡실시간</span>' : '<span class="dim">config</span>') + '</span></div><div class="ct">' + c.position_count + ' 포지션 · 지갑 내 ' + pct(c.holding_lgns, walletTotal) + '</div></div>' +
-    '<div class="chsum"><span>예치(원금)</span><b>' + f2(c.principal_lgns) + '</b><span>현재가치</span><b class="pur">' + f2(c.holding_lgns) + '</b><span>비중</span><b>' + pct(c.holding_lgns, walletTotal) + '</b><span>redeem가능</span><b class="grn">' + f2(c.redeemable_lgns) + '</b><span>USD(전체)</span>' + usd(c.usd_total) + '<span>매도세후</span>' + usd(c.usd_total_after_tax) + '</div>' + bbLine +
+    '<div class="chsum"><span>예치(원금)</span><b>' + f2(c.principal_lgns) + '</b><span>현재가치</span><b class="pur">' + f2(c.holding_lgns) + '</b><span>비중</span><b>' + pct(c.holding_lgns, walletTotal) + '</b><span>redeem가능</span><b class="grn">' + f2(c.redeemable_lgns) + '</b><span>USD(전체)</span>' + usd(c.usd_total) + '<span>매도세후</span>' + usd(c.usd_total_after_tax) + '</div>' + bbLine + dappLine +
     '<table class="m"><thead><tr><th>상품</th><th>예치(원금)</th><th>현재가치</th><th>비중</th><th>원금 해제분</th><th>rebase interest</th><th>extra interest</th><th>USD</th><th>매도세후</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
 }
 function renderDetail(name) {
@@ -83,7 +92,7 @@ function renderDetail(name) {
   let html = '<span class="back" onclick="go(null)">← 요약으로</span>' +
     '<div class="chead" style="border-radius:8px;margin-bottom:10px"><div class="nm">' + esc(w.name) + ' <span class="ct">' + esc(w.address) + '</span></div><div class="ct">원금 ' + f2(w.principal_lgns) + ' · 현재가치 ' + f2(w.holding_lgns) + ' LGNS</div></div>';
   let walletTotal = w.holding_lgns || 0;   // 비중 분모도 현재가치 기준으로 통일
-  Object.keys(w.detail.chains).forEach(k => { let c = w.detail.chains[k]; if (c.position_count > 0) html += chainBlock(c, walletTotal); });
+  Object.keys(w.detail.chains).forEach(k => { let c = w.detail.chains[k]; if (c.position_count > 0) html += chainBlock(c, walletTotal, w.dapp_anubis_staked); });
   return html;
 }
 function renderStatus() {

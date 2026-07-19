@@ -39,6 +39,16 @@ export const CONTRACTS = {
       address: "0xf7a0cacdf0810609ee5618247c4121b799e41664",
       claimable_selector: "0x402914f5"
     },
+    // 정식 dApp의 Invite(초대) 페이지가 "Anubis Staked"로 띄우는 값의 출처(2026-07-19 번들 직독).
+    // getStakedAmount(address) = keccak 앞 4바이트 0x4da6a556. 우리 보유 총액과 정의가 다르다:
+    //   = Σ_long(balanceForGons + pendingPayout + extraInterest) + 미특정분(관측 247~251, 정체 미상)
+    //   flexible·소각채권 미포함, Polygon 미포함(dApp은 "Polygon Staked" 별도 칸).
+    // 자산 평가가 아니라 추천 자격 산정용 지표 → 참조 표시 전용, 합계에 넣지 않는다.
+    // 정본: vault 20_Knowledge/crypto-defi/anubis-dapp-invite-staked-aggregator.md
+    dapp_aggregator: {
+      address: "0xeBd08fa8768c366fcCCd8130AA3c0b35DC50f9a6",
+      staked_selector: "0x4da6a556"
+    },
     // Burn&Bond 소각채권(2026-06-22 출시). 율은 단일 250% 상수가 아니라 본드별 스냅샷:
     // DAI계=250% / LGNS·터보계=230% (vault anubis-burn-bond-mechanism §3.5, 2026-06-29 정정).
     // 본드별 read = getUserDeposits(addr) 0x2a5bf6d2 → [offset,len, 본드당 9워드]:

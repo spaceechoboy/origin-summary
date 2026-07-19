@@ -31,6 +31,19 @@ function decodeBonds(hex) {
   return bonds;
 }
 
+// 정식 dApp Invite 페이지의 "Anubis Staked" 값(참조 대조용). 포지션이 아니라 단일 지표라
+// Position[]에 넣지 않는다 — 넣으면 포지션 수·보유 합계가 오염된다.
+// 실패(0/revert/네트워크)는 null → 화면에서 대조 줄을 숨긴다.
+export async function readDappStakedAnubis(wallet, call) {
+  const ag = CONTRACTS.anubis.dapp_aggregator;
+  if (!ag) return null;
+  try {
+    const r = await call(ag.address, ag.staked_selector + enc32(wallet));
+    if (!r || r === '0x') return null;
+    return toLgns(uintOf(r));
+  } catch (e) { return null; }
+}
+
 export async function scanAnubisExtra(wallet, call) {
   const out = [];
   const flex = CONTRACTS.anubis.flexible;

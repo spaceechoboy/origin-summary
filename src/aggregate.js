@@ -170,6 +170,8 @@ export function buildWallets(walletResults, cfg, prices, shortAddr) {
       address: r.wallet,
       principal_lgns: detail.notional.principal_lgns,
       holding_lgns: detail.notional.holding_lgns,
+      // dApp Invite "Anubis Staked" 참조값. 정의가 달라 합계에 넣지 않고 대조 표시에만 쓴다.
+      dapp_anubis_staked: (r.dappAnubisStaked == null) ? null : round(r.dappAnubisStaked, 6),
       redeemable_lgns: detail.notional.redeemable_lgns,
       chains_present: Object.values(detail.chains).filter((c) => c.position_count > 0).map((c) => c.key),
       detail,
