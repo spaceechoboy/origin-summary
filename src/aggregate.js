@@ -36,6 +36,9 @@ function aggregateProducts(positions, chain, cfg, price) {
       label: labels[cn] || cn,
       count: g.count,
       principal_lgns: round(g.principal, 6),
+      // 현재가치 = balanceForGons(원금+리베이스) + 원금 해제분 + extra. Dapp의 long 평가와 동일 기준.
+      // principal_lgns(원금 명목)와 병기한다 — 둘은 다른 질문에 답한다(투입 원금 vs 현재 평가).
+      holding_lgns: round(g.holding, 6),
       redeemable_lgns: round(g.redeem, 6),
       // 원금 해제분 = 회수가능 중 원금/잔액분(이자·추가보상 제외). redeem = unlocked + rebase + extra.
       unlocked_lgns: round(Math.max(0, g.redeem - g.rebase - g.extra), 6),
@@ -158,6 +161,7 @@ export function buildWallets(walletResults, cfg, prices, shortAddr) {
       name: r.label || (shortAddr ? shortAddr(r.wallet) : r.wallet),
       address: r.wallet,
       principal_lgns: detail.notional.principal_lgns,
+      holding_lgns: detail.notional.holding_lgns,
       redeemable_lgns: detail.notional.redeemable_lgns,
       chains_present: Object.values(detail.chains).filter((c) => c.position_count > 0).map((c) => c.key),
       detail,

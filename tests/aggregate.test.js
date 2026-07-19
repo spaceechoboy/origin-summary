@@ -106,3 +106,17 @@ test('buildWallets: 명목 보유 큰 순 정렬 + 지갑별 detail', () => {
   assert.deepEqual(ws[0].chains_present, ['polygon']);
   assert.deepEqual(ws[1].chains_present, ['anubis']);
 });
+
+// 원금 명목합과 현재가치는 다른 질문에 답한다 — 상품 행·지갑 롤업 양쪽에서 병기되어야 한다.
+// (2026-07-19 dApp 대조: dApp의 long 평가 기준 = balanceForGons+해제분+extra = holding)
+test('상품 행·지갑 롤업에 holding_lgns(현재가치)가 principal과 함께 노출된다', () => {
+  const a = aggregate([longPoly(W1)], DISPLAY, PRICES);
+  const row = a.chains.polygon.products.find((p) => p.key === 'LONG600');
+  assert.equal(row.principal_lgns, 1000);
+  assert.equal(row.holding_lgns, 1015);          // 원금과 별개로 현재가치가 실려야 함
+  assert.notEqual(row.holding_lgns, row.principal_lgns);
+
+  const ws = buildWallets([{ wallet: W1, label: '지갑', positions: [longPoly(W1)] }], DISPLAY, PRICES);
+  assert.equal(ws[0].principal_lgns, 1000);
+  assert.equal(ws[0].holding_lgns, 1015);
+});
