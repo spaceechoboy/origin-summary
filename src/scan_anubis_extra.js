@@ -20,7 +20,13 @@ function decodeBonds(hex) {
     const b = body.slice(k * stride, (k + 1) * stride);
     const rate = Number(b[1]);
     if (!(rate >= 1000 && rate <= 100000)) throw new Error('bond rate out of range ' + rate);
-    bonds.push({ principalDai: Number(b[0]) / 1e18, ratePct: rate / 100, burnedLgns: toLgns(b[2]) });
+    // b[3]=누적 지급된 DAI 가치(1e18), b[4]=누적 지급된 LGNS 수량(1e9).
+    // 2026-07-19 시간비교로 확정(14일전 206.91 → 7일전 250.14 → 현재 287.19 DAI, 단조증가).
+    // 드립은 DAI 채무를 지급 시점 시가로 LGNS 환산해 지급 → b[3]/b[4] = 평균 지급단가.
+    bonds.push({
+      principalDai: Number(b[0]) / 1e18, ratePct: rate / 100, burnedLgns: toLgns(b[2]),
+      paidDai: Number(b[3]) / 1e18, paidLgns: toLgns(b[4]),
+    });
   }
   return bonds;
 }
@@ -77,14 +83,18 @@ export async function scanAnubisExtra(wallet, call) {
         try { claim = uintOf(await call(bb.address, bb.claimable_by_index_selector + enc32(wallet) + i32(i))); } catch (e) {}
         const claimLgns = toLgns(claim);
         const totalOwedDai = b.principalDai * b.ratePct / 100;
+        // 남은 미지급 = 계약 총액 − 이미 지급분. 자산 가치는 이쪽이다(총액은 이미 받은 몫을 포함).
+        const remainingOwedDai = Math.max(0, totalOwedDai - b.paidDai);
         out.push({
           wallet, chain: 'anubis', contractName: 'anubis_burnbond', contractAddr: bb.address,
           positionType: 'burn_bond', stakeIndex: i,
           principalLgns: b.burnedLgns, interestLgns: 0, unlockedPrincipalLgns: 0, extraLgns: 0,
           pendingLgns: claimLgns, cooldownLgns: 0, cooldownUnlock: 0, holdingLgns: 0,
-          principalDai: b.principalDai, totalOwedDai, burnedLgns: b.burnedLgns, ratePct: b.ratePct,
+          principalDai: b.principalDai, totalOwedDai, remainingOwedDai,
+          paidDai: b.paidDai, paidLgns: b.paidLgns,
+          burnedLgns: b.burnedLgns, ratePct: b.ratePct,
           claimableNow: claim > 0n,
-          note: `Burn&Bond ${b.ratePct}% — 원금 ${b.principalDai.toFixed(2)} DAI · 총 지급예정 ${totalOwedDai.toFixed(2)} DAI · 소각 ${b.burnedLgns.toFixed(6)} LGNS · 드립가능 ${claimLgns.toFixed(6)} LGNS`
+          note: `Burn&Bond ${b.ratePct}% — 원금 ${b.principalDai.toFixed(2)} DAI · 총 지급예정 ${totalOwedDai.toFixed(2)} DAI · 수령 ${b.paidDai.toFixed(2)} DAI · 남은 미지급 ${remainingOwedDai.toFixed(2)} DAI · 소각 ${b.burnedLgns.toFixed(6)} LGNS · 드립가능 ${claimLgns.toFixed(6)} LGNS`
         });
       }
     } else {
@@ -100,7 +110,9 @@ export async function scanAnubisExtra(wallet, call) {
           positionType: 'burn_bond', stakeIndex: null,
           principalLgns: burnedLgns, interestLgns: 0, unlockedPrincipalLgns: 0, extraLgns: 0,
           pendingLgns: 0, cooldownLgns: 0, cooldownUnlock: 0, holdingLgns: 0,
-          principalDai, totalOwedDai, burnedLgns, ratePct,
+          // 폴백은 struct를 못 읽으므로 이미 지급분(word3) 미상 → 남은 미지급=총액(과대 가능, 보수적 표기).
+          principalDai, totalOwedDai, remainingOwedDai: totalOwedDai, paidDai: null, paidLgns: null,
+          burnedLgns, ratePct,
           claimableNow: false,
           note: `Burn&Bond(폴백 집계) — 원금 ${principalDai.toFixed(2)} DAI · 총 지급예정 ${totalOwedDai.toFixed(2)} DAI(${ratePct}% 가정) · 소각≈ ${burnedLgns.toFixed(6)} LGNS`
         });

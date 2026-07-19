@@ -80,28 +80,36 @@ export function aggregate(positions, cfg, prices) {
       for (const p of bbPos) {
         const r = (p.ratePct == null) ? -1 : Number(p.ratePct); // -1 = 율 미상(폴백)
         let g = gm.get(r);
-        if (!g) { g = { count: 0, principalDai: 0, totalOwedDai: 0, burnedLgns: 0, claimableLgns: 0 }; gm.set(r, g); }
+        if (!g) { g = { count: 0, principalDai: 0, totalOwedDai: 0, remainingOwedDai: 0, paidDai: 0, burnedLgns: 0, claimableLgns: 0 }; gm.set(r, g); }
         g.count += 1;
         g.principalDai += Number(p.principalDai) || 0;
         g.totalOwedDai += Number(p.totalOwedDai) || 0;
+        g.remainingOwedDai += Number(p.remainingOwedDai) || 0;
+        g.paidDai += Number(p.paidDai) || 0;
         g.burnedLgns += Number(p.burnedLgns) || 0;
         g.claimableLgns += Number(p.pendingLgns) || 0;
       }
       const groups = [...gm.entries()].sort((a, b) => a[0] - b[0]).map(([r, g]) => {
-        const gUsd = round(g.totalOwedDai, 4);
+        // USD는 계약 총액이 아니라 남은 미지급 기준. 총액을 쓰면 이미 수령한 몫까지 자산으로 센다
+        // (2026-07-19 새출발1: 287.19 DAI 과대계상, 시간이 갈수록 벌어짐).
+        const gUsd = round(g.remainingOwedDai, 4);
         return {
           rate_pct: r < 0 ? null : r, count: g.count,
           principal_dai: round(g.principalDai, 6), total_owed_dai: round(g.totalOwedDai, 6),
+          remaining_owed_dai: round(g.remainingOwedDai, 6), paid_dai: round(g.paidDai, 6),
           burned_lgns: round(g.burnedLgns, 6), claimable_lgns: round(g.claimableLgns, 6),
           usd: gUsd, usd_after_tax: afterTax(gUsd, tax),
         };
       });
       const totalOwedDai = groups.reduce((a, g) => a + g.total_owed_dai, 0);
-      const bbUsd = round(totalOwedDai, 4);
+      const remainingOwedDai = groups.reduce((a, g) => a + g.remaining_owed_dai, 0);
+      const bbUsd = round(remainingOwedDai, 4);
       burnBond = {
         groups,
         principalDai: round(groups.reduce((a, g) => a + g.principal_dai, 0), 6),
         totalOwedDai: round(totalOwedDai, 6),
+        remainingOwedDai: round(remainingOwedDai, 6),
+        paidDai: round(groups.reduce((a, g) => a + g.paid_dai, 0), 6),
         burnedLgns: round(groups.reduce((a, g) => a + g.burned_lgns, 0), 6),
         claimableLgns: round(groups.reduce((a, g) => a + g.claimable_lgns, 0), 6),
         usd: bbUsd, usd_after_tax: afterTax(bbUsd, tax),
@@ -167,6 +175,6 @@ export function buildWallets(walletResults, cfg, prices, shortAddr) {
       detail,
     });
   }
-  out.sort((a, b) => b.principal_lgns - a.principal_lgns);
+  out.sort((a, b) => b.holding_lgns - a.holding_lgns);   // 정렬 기준도 현재가치로 통일
   return out;
 }

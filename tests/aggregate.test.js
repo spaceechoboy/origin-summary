@@ -56,16 +56,17 @@ test('aggregate: 가격 없으면 usd null (NaN 없음)', () => {
 });
 
 // 소각채권 포지션(본드 1건 = 1포지션, 율별 스냅샷). 소각 LGNS = principalLgns(명목 반영).
-const bbPos = (wallet, ratePct, principalDai, burnedLgns, pendingLgns, idx) => ({
+const bbPos = (wallet, ratePct, principalDai, burnedLgns, pendingLgns, idx, paidDai = 0) => ({
   wallet, chain: 'anubis', contractName: 'anubis_burnbond', positionType: 'burn_bond', stakeIndex: idx,
   principalLgns: burnedLgns, holdingLgns: 0, pendingLgns, interestLgns: 0, extraLgns: 0,
   claimableNow: pendingLgns > 0, ratePct, principalDai, totalOwedDai: principalDai * ratePct / 100, burnedLgns,
+  paidDai, remainingOwedDai: principalDai * ratePct / 100 - paidDai,
 });
 
 test('aggregate: 소각채권 율별(230/250) 그룹 분리 + 명목 LGNS·redeem 반영 + 상품 테이블 제외', () => {
-  const b230a = bbPos(W1, 230, 1000, 400, 8, 0);
-  const b230b = bbPos(W1, 230, 500, 200, 0, 1);
-  const b250 = bbPos(W1, 250, 730, 300, 0, 2);
+  const b230a = bbPos(W1, 230, 1000, 400, 8, 0, 100);   // 이미 100 DAI 수령
+  const b230b = bbPos(W1, 230, 500, 200, 0, 1, 50);     // 이미 50 DAI 수령
+  const b250 = bbPos(W1, 250, 730, 300, 0, 2, 25);      // 이미 25 DAI 수령
   const a = aggregate([commAnu(W1), b230a, b230b, b250], DISPLAY, { polygon: null, anubis: 3 });
   const bb = a.chains.anubis.burn_bond;
   // 율별 그룹(오름차순: 230 → 250)
@@ -76,11 +77,16 @@ test('aggregate: 소각채권 율별(230/250) 그룹 분리 + 명목 LGNS·redee
   assert.equal(bb.groups[0].total_owed_dai, 3450);     // 1000×2.3 + 500×2.3
   assert.equal(bb.groups[0].burned_lgns, 600);
   assert.equal(bb.groups[0].claimable_lgns, 8);
-  assert.equal(bb.groups[0].usd, 3450);                // DAI ≈ $1
+  assert.equal(bb.groups[0].paid_dai, 150);            // 100 + 50
+  assert.equal(bb.groups[0].remaining_owed_dai, 3300); // 3450 - 150
+  // ★USD는 계약 총액이 아니라 남은 미지급 기준 — 이미 받은 몫을 자산으로 다시 세지 않는다
+  assert.equal(bb.groups[0].usd, 3300);
   assert.equal(bb.groups[1].count, 1);
   assert.equal(bb.groups[1].total_owed_dai, 1825);     // 730×2.5
   // 체인 합계
   assert.equal(bb.totalOwedDai, 5275);
+  assert.equal(bb.paidDai, 175);                       // 100 + 50 + 25
+  assert.equal(bb.remainingOwedDai, 5100);             // 5275 - 175
   assert.equal(bb.burnedLgns, 900);
   // 명목 LGNS(도넛)에 소각량 포함: comm 0 + 400+200+300
   assert.equal(a.chains.anubis.principal_lgns, 900);
@@ -90,8 +96,9 @@ test('aggregate: 소각채권 율별(230/250) 그룹 분리 + 명목 LGNS·redee
   // 포지션 수 = 본드 개수 그대로(1본드 1포지션)
   assert.equal(a.notional.position_count, 4);
   assert.equal(a.chains.anubis.products.find((p) => p.key === 'anubis_burnbond'), undefined); // 테이블 제외
-  // USD(전체) = community holding 26*3(=78) + 총지급 5275 = 5353 (소각 LGNS는 USD 이중계산 안 함)
-  assert.equal(a.chains.anubis.usd_total, 5353);
+  // USD(전체) = community holding 26*3(=78) + 남은 미지급 5100 = 5178
+  // (소각 LGNS는 USD 이중계산 안 함 / 총액 5275를 쓰면 이미 받은 175를 자산으로 다시 세게 됨)
+  assert.equal(a.chains.anubis.usd_total, 5178);
 });
 
 test('buildWallets: 명목 보유 큰 순 정렬 + 지갑별 detail', () => {

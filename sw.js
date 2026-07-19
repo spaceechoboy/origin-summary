@@ -1,6 +1,6 @@
 /* Origin Summary PWA service worker — 앱 셸 캐시(설치형 PWA) + network-first.
    외부 RPC/API/CDN은 통과(캐시 안 함). */
-const CACHE = 'lgns-summary-v5';
+const CACHE = 'lgns-summary-v6';
 const SHELL = [
   './', './index.html', './app.js', './contracts.js',
   './src/codec.js', './src/rpc.js', './src/scan_long.js', './src/scan_tokens.js',
@@ -30,9 +30,12 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   // 앱 셸(같은 출처)만 network-first→cache 폴백. 외부 API/RPC는 그대로 통과.
   if (url.origin === location.origin && e.request.method === 'GET') {
-    // HTML/네비게이션은 HTTP 캐시 우회(cache:'reload')로 항상 최신 — 업데이트 즉시 반영(stale 방지).
+    // HTML뿐 아니라 JS/JSON 셸도 HTTP 캐시 우회(cache:'reload') — network-first여도 e.request를 쓰면
+    // 브라우저 HTTP 캐시에서 구 모듈이 그대로 돌아온다(2026-07-19 실측: 스캐너는 새 필드를 내는데
+    // 화면은 계속 0. GitHub Pages의 긴 JS 캐시에서 배포 후에도 재현되는 문제).
     const isHTML = e.request.mode === 'navigate' || /\.html$/.test(url.pathname) || url.pathname.endsWith('/');
-    const req = isHTML ? new Request(e.request.url, { cache: 'reload' }) : e.request;
+    const isCode = /\.(js|json)$/.test(url.pathname);
+    const req = (isHTML || isCode) ? new Request(e.request.url, { cache: 'reload' }) : e.request;
     e.respondWith(
       fetch(req)
         .then((r) => { const cp = r.clone(); caches.open(CACHE).then((c) => c.put(e.request, cp)); return r; })
