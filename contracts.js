@@ -39,12 +39,17 @@ export const CONTRACTS = {
       address: "0xf7a0cacdf0810609ee5618247c4121b799e41664",
       claimable_selector: "0x402914f5"
     },
-    // 정식 dApp의 Invite(초대) 페이지가 "Anubis Staked"로 띄우는 값의 출처(2026-07-19 번들 직독).
-    // getStakedAmount(address) = keccak 앞 4바이트 0x4da6a556. 우리 보유 총액과 정의가 다르다:
-    //   = Σ_long(balanceForGons + pendingPayout + extraInterest) + 미특정분(관측 247~251, 정체 미상)
-    //   flexible·소각채권 미포함, Polygon 미포함(dApp은 "Polygon Staked" 별도 칸).
+    // 정식 dApp의 Invite(초대) 페이지가 "Anubis 스테이킹"으로 띄우는 값의 출처(2026-07-19 번들 직독).
+    // getStakedAmount(address) = keccak 앞 4바이트 0x4da6a556.
+    // ★공식 확정(2026-07-28, 4지갑 교차검증·오차 0~0.0001 — 구 주석 "미특정분 247~251·flexible/
+    //   소각채권 미포함"은 한 지갑 산수만 맞춘 오판이었고 정정됨):
+    //   = Σ balanceForGons(장기360·장기600·에너지값360·제네시스360)
+    //   + 유동/일반 스테이킹(flexVault.getDepositorBalance)
+    //   + 소각채권 미상환분(SOAK 0x11b10C9827c5B7071E96fcAa143B4e6E86b17c69 · 0xb79215d6)
+    //   ※ pendingPayout·extraInterest는 100% 배제(전자는 bfg의 부분집합).
+    //   Polygon 미포함(dApp은 "Polygon Staked" 별도 칸).
     // 자산 평가가 아니라 추천 자격 산정용 지표 → 참조 표시 전용, 합계에 넣지 않는다.
-    // 정본: vault 20_Knowledge/crypto-defi/anubis-dapp-invite-staked-aggregator.md
+    // 정본: vault 20_Knowledge/crypto-defi/anubis-dapp-invite-staked-aggregator.md §8
     dapp_aggregator: {
       address: "0xeBd08fa8768c366fcCCd8130AA3c0b35DC50f9a6",
       staked_selector: "0x4da6a556"

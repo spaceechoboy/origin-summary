@@ -59,10 +59,17 @@ async function scanContract(wallet, chain, name, call) {
         principalLgns, interestLgns, unlockedPrincipalLgns, extraLgns,
         pendingLgns: interestLgns + unlockedPrincipalLgns + extraLgns,
         cooldownLgns: 0, cooldownUnlock: 0,
-        // 현재가치 = balanceForGons(원금+리베이스) + 미청구 해제분(pendingPayout) + extra.
-        // Dapp 정합(2026-07-05 온체인 검증: 새출발1 = principal 8295.8 + 리베이스 890.2 +
-        // 해제분 404.3 + extra 129.4 ≈ Dapp 9715). 이전엔 unlocked 제외로 ~pending만큼 과소계상.
-        holdingLgns: principalLgns + interestLgns + extraLgns + unlockedPrincipalLgns,
+        // 현재가치 = balanceForGons(원금+리베이스) + extra.
+        // ★2026-07-28 정정 — pendingPayout(해제분)은 가산하지 않는다: balanceForGons에 **이미
+        //   포함된** 원금의 부분집합이라 더하면 이중계상이다.
+        //   산술 반증: 해제분이 gons에서 빠져나갔다면 bfg가 그만큼 작아야 하는데, 실측은
+        //   bfg/principal이 리베이스 계수 그대로다(새출발2 1132 → bfg 1133.6432, pp 65.5428 /
+        //   새출발1 1000 → bfg 1001.4516, pp 109.9 — 둘 다 계수 1.0014516). unstakePrincipal(pp)
+        //   실행 시 락원금이 pp만큼 줄어드는 것도 pp가 원금 그 자체라는 뜻.
+        //   구 주석의 "Dapp 정합(2026-07-05)"은 한 지갑·한 시점 산수만 맞춘 오판이었다.
+        //   정본: vault 20_Knowledge/crypto-defi/anubis-dapp-invite-staked-aggregator.md §8
+        //   ※ unlockedPrincipalLgns 필드 자체는 유지 — pendingLgns(청구 가능액) 표시에 쓴다.
+        holdingLgns: principalLgns + interestLgns + extraLgns,
         claimableNow: (pendingRaw > 0n || interestRaw > 0n || extraRaw > 0n),
         note: `${name} stake[${idx}] term=${meta.term_days}d`
       });

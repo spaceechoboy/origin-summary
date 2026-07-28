@@ -38,7 +38,12 @@ test('scanLong: 단일 stake 세분(interest/unlocked/extra) 정확', async () =
   assert.equal(Number(p.interestLgns.toFixed(4)), 12.0447);
   assert.equal(p.unlockedPrincipalLgns, 5);
   assert.equal(p.extraLgns, 3);
-  assert.equal(Number(p.holdingLgns.toFixed(4)), 1020.0447); // principal+interest+extra+unlocked(pendingPayout) — Dapp 정합
+  // ★2026-07-28 정정: 1020.0447 → 1015.0447. pendingPayout(unlocked 5)은 balanceForGons에 이미
+  //   포함된 원금의 부분집합이라 가산하면 이중계상 — 구 기대값이 그 버그를 정답으로 고정하고 있었다.
+  assert.equal(Number(p.holdingLgns.toFixed(4)), 1015.0447); // = principal + interest + extra (해제분 제외)
+  // 회귀 가드: 해제분이 다시 합계에 들어오면 RED. unlocked 필드 자체는 청구액 표시용으로 살아 있다.
+  assert.equal(Number((p.holdingLgns + p.unlockedPrincipalLgns).toFixed(4)), 1020.0447);
+  assert.equal(Number(p.pendingLgns.toFixed(4)), 20.0447); // 청구 가능액 = interest + unlocked + extra (여긴 해제분 포함이 맞음)
   assert.equal(p.claimableNow, true);
 });
 
