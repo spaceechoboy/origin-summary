@@ -28,6 +28,13 @@ export function anubisPriceFromReserves(r0, r1) {
   return (Number(r1) / Number(r0)) * 1e-9;
 }
 
+// pure: Polygon 공식 풀 getReserves → LGNS 가격. 토큰 순서가 Anubis 와 반대다.
+// r0=DAI(18dec), r1=LGNS(9dec). price = (r0/1e18) / (r1/1e9) = (r0/r1)*1e-9.
+export function polygonPriceFromReserves(r0, r1) {
+  if (!r1 || BigInt(r1) <= 0n) return 0;
+  return (Number(r0) / Number(r1)) * 1e-9;
+}
+
 // pure: 온체인 매도세 분율(0..1). 매도세 = 1-(1-feeRatio/1e5)(1-extraFeeRatio/1e5). PRECISION=1e5.
 // 정본: vault anubis-sell-tax-19.25 / lgns-polygon-sell-tax-5pct (둘 다 PRECISION=100,000, 순차구조).
 export function computeSellTax(feeRaw, extraRaw, PRECISION = 1e5) {
@@ -71,12 +78,26 @@ export async function fetchPrices(deps = {}) {
   const fetchJson = deps.fetchJson || getJson;
   const out = { polygon: null, anubis: null, fxKrw: null, source: {} };
 
-  // Polygon LGNS — DexScreener
+  // Polygon LGNS — 공식 풀 getReserves (온체인). Anubis 와 동일 방식.
+  // ⚠ DexScreener 토큰 엔드포인트(/tokens/v1/{chain}/{token})를 쓰면 안 된다 — LGNS 페어를
+  //    단 1개만 주는데 그게 유동성 $1.2만짜리 먼지 풀(0xB135Aa99…)이라 5%+ 틀린다(2026-07-28 실사고).
   try {
-    const d = await fetchJson(`https://api.dexscreener.com/tokens/v1/polygon/${POLY_LGNS}`);
-    out.polygon = parseDexScreener(d);
-    out.source.polygon = 'dexscreener';
+    const hex = await polyCall(CONTRACTS.polygon.dex.lgns_dai_pair, SEL_RESERVES);
+    if (hex) {
+      const [r0, r1] = rpcWords(hex);
+      const p = polygonPriceFromReserves(r0, r1);
+      if (p > 0) { out.polygon = p; out.source.polygon = 'onchain_pool'; }
+    }
   } catch (e) { /* graceful */ }
+
+  // 폴백 — 온체인 전멸 시에만. 반드시 '공식 풀 주소 고정 조회'로.
+  if (out.polygon == null) {
+    try {
+      const d = await fetchJson(`https://api.dexscreener.com/latest/dex/pairs/polygon/${CONTRACTS.polygon.dex.lgns_dai_pair}`);
+      out.polygon = parseDexScreener(d);
+      out.source.polygon = 'dexscreener_pair';
+    } catch (e) { /* graceful */ }
+  }
 
   // Anubis LGNS — LP getReserves (온체인)
   try {
