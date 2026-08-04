@@ -80,7 +80,7 @@ function chainBlock(c, walletTotal, dappStaked) {
     dappLine = '<div class="chsum" style="background:#0d1420"><span>📱 dApp 초대탭 대조</span><b>' + f2(dappStaked) + ' LGNS</b>' +
       '<span>우리 현재가치</span><b>' + f2(c.holding_lgns) + '</b>' +
       '<span>차이</span><b class="yel">' + (d >= 0 ? '+' : '−') + f2(Math.abs(d)) + '</b>' +
-      '<span style="font-size:11px;color:#8b949e">dApp 값은 <b>추천 자격 지표</b>(장기 스테이킹 기준) — flexible·소각채권·Polygon 미포함. 자산 총액이 아닙니다.</span></div>';
+      '<span style="font-size:11px;color:#8b949e">dApp 값은 <b>추천 자격 지표</b>(장기 스테이킹 기준) — 유동/flexible·소각채권 미상환분·ILO-DAI 포함, pendingPayout·extraInterest 배제. Polygon 미포함. 자산 총액이 아닙니다.</span></div>';
   }
   return '<div class="chain"><div class="chead"><div class="nm"><span class="dot" style="background:' + (COLOR[c.key] || "#888") + '"></span>' + esc(c.name) + ' <span class="ct">· 매도세 ' + (c.sell_tax * 100).toFixed(2) + '% ' + (c.sell_tax_live ? '<span style="color:#7ee787">⚡실시간</span>' : '<span class="dim">config</span>') + '</span></div><div class="ct">' + c.position_count + ' 포지션 · 지갑 내 ' + pct(c.holding_lgns, walletTotal) + '</div></div>' +
     '<div class="chsum"><span>예치(원금)</span><b>' + f2(c.principal_lgns) + '</b><span>현재가치</span><b class="pur">' + f2(c.holding_lgns) + '</b><span>비중</span><b>' + pct(c.holding_lgns, walletTotal) + '</b><span>redeem가능</span><b class="grn">' + f2(c.redeemable_lgns) + '</b><span>USD(전체)</span>' + usd(c.usd_total) + '<span>매도세후</span>' + usd(c.usd_total_after_tax) + '</div>' + bbLine + dappLine +
